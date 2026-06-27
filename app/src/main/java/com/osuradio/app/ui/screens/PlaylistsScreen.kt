@@ -17,11 +17,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -40,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.osuradio.app.data.Playlist
 import com.osuradio.app.viewmodel.MainViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -75,46 +80,13 @@ fun PlaylistsScreen(viewModel: MainViewModel) {
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(playlists.value, key = { it.id }) { playlist ->
-                    val songCount = viewModel.getSongsForPlaylist(playlist).size
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = playlist.name,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = "$songCount songs",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            IconButton(onClick = { viewModel.playPlaylist(playlist) }) {
-                                Icon(
-                                    Icons.Filled.PlayArrow,
-                                    contentDescription = "Play playlist",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            IconButton(onClick = { viewModel.deletePlaylist(playlist.id) }) {
-                                Icon(
-                                    Icons.Filled.Delete,
-                                    contentDescription = "Delete playlist",
-                                    tint = MaterialTheme.colorScheme.error
-                                )
-                            }
-                        }
-                    }
+                    PlaylistCard(
+                        playlist = playlist,
+                        songCount = viewModel.getSongsForPlaylist(playlist).size,
+                        onPlay = { viewModel.playPlaylist(playlist, shuffle = false) },
+                        onShuffle = { viewModel.playPlaylist(playlist, shuffle = true) },
+                        onDelete = { viewModel.deletePlaylist(playlist.id) }
+                    )
                 }
             }
         }
@@ -164,5 +136,84 @@ fun PlaylistsScreen(viewModel: MainViewModel) {
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun PlaylistCard(
+    playlist: Playlist,
+    songCount: Int,
+    onPlay: () -> Unit,
+    onShuffle: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var showMenu by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = playlist.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "$songCount songs",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(onClick = onPlay) {
+                Icon(
+                    Icons.Filled.PlayArrow,
+                    contentDescription = "Play playlist",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            IconButton(onClick = onShuffle) {
+                Icon(
+                    Icons.Filled.Shuffle,
+                    contentDescription = "Shuffle playlist",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            Box {
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(
+                        Icons.Filled.MoreVert,
+                        contentDescription = "More",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Filled.Delete,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        },
+                        onClick = {
+                            showMenu = false
+                            onDelete()
+                        }
+                    )
+                }
+            }
+        }
     }
 }
