@@ -48,11 +48,7 @@ android {
         buildConfig = true
     }
 
-    packaging {
-        jniLibs {
-            useLegacyPackaging = true
-        }
-    }
+
 }
 
 dependencies {
@@ -68,7 +64,6 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.media3.exoplayer)
-    implementation(libs.androidx.media3.exoplayer.ffmpeg)
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.media3.ui)
     implementation(libs.coil.compose)
