@@ -30,7 +30,7 @@ more features are coming soon, so stay tuned!
 Linux machine (make sure JDK17 & Android SDK is installed)
 Clone the repository:
 ```
-git clone ...
+git clone https://github.com/simplyIeaf/osu-radio.git
 ```
 Go inside the cloned repository:
 ```
