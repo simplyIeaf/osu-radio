@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.IBinder
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.osuradio.app.BuildConfig
 import com.osuradio.app.data.AppSettings
 import com.osuradio.app.data.ModSettings
 import com.osuradio.app.data.Playlist
@@ -20,13 +21,20 @@ import com.osuradio.app.utils.ConfigManager
 import com.osuradio.app.utils.Logger
 import com.osuradio.app.utils.OszImporter
 import com.osuradio.app.utils.SongScanner
+import com.osuradio.app.utils.UpdateChecker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.util.UUID
+
+data class UpdatePrompt(
+    val latestVersion: String,
+    val apkUrl: String
+)
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val TAG = "MainViewModel"
@@ -63,6 +71,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _queue = MutableStateFlow<List<Song>>(emptyList())
     val queue: StateFlow<List<Song>> = _queue.asStateFlow()
+
+    private val _updatePrompt = MutableStateFlow<UpdatePrompt?>(null)
+    val updatePrompt: StateFlow<UpdatePrompt?> = _updatePrompt.asStateFlow()
+
+    private val _updateDownloading = MutableStateFlow(false)
+    val updateDownloading: StateFlow<Boolean> = _updateDownloading.asStateFlow()
+
+    private val _updateDownloadProgress = MutableStateFlow(0)
+    val updateDownloadProgress: StateFlow<Int> = _updateDownloadProgress.asStateFlow()
+
+    private val _successUpdateVersion = MutableStateFlow<String?>(null)
+    val successUpdateVersion: StateFlow<String?> = _successUpdateVersion.asStateFlow()
 
     private var musicService: MusicService? = null
     private var serviceBound = false
@@ -129,11 +149,77 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _queue.value = allSongs
                     _isLoading.value = false
                 }
+
+                withContext(Dispatchers.Main) {
+                    checkSuccessfulUpdate(context)
+                }
+
+                if (_settings.value.autoCheckUpdates) {
+                    checkForUpdate(context)
+                }
             } catch (e: Exception) {
                 Logger.error(TAG, "Initialization failed", e)
                 withContext(Dispatchers.Main) {
                     _isLoading.value = false
                 }
+            }
+        }
+    }
+
+    private fun checkSuccessfulUpdate(context: Context) {
+        val prefs = context.getSharedPreferences("osu_radio_update", Context.MODE_PRIVATE)
+        val pendingVersion = prefs.getString("pending_success_version", null)
+        if (!pendingVersion.isNullOrEmpty()) {
+            _successUpdateVersion.value = pendingVersion
+            prefs.edit().remove("pending_success_version").apply()
+        }
+    }
+
+    fun dismissSuccessUpdate() {
+        _successUpdateVersion.value = null
+    }
+
+    fun checkForUpdate(context: Context) {
+        viewModelScope.launch {
+            try {
+                val release = UpdateChecker.fetchLatestRelease() ?: return@launch
+                val currentVersion = BuildConfig.APP_VERSION
+                val lastDismissed = _settings.value.lastDismissedVersion
+                if (UpdateChecker.isNewerVersion(release.tagName, currentVersion) &&
+                    release.tagName != lastDismissed
+                ) {
+                    _updatePrompt.value = UpdatePrompt(
+                        latestVersion = release.tagName,
+                        apkUrl = release.apkDownloadUrl
+                    )
+                }
+            } catch (e: Exception) {
+                Logger.error(TAG, "Update check failed", e)
+            }
+        }
+    }
+
+    fun dismissUpdate() {
+        val prompt = _updatePrompt.value ?: return
+        val newSettings = _settings.value.copy(lastDismissedVersion = prompt.latestVersion)
+        updateSettings(newSettings)
+        _updatePrompt.value = null
+    }
+
+    fun startDownloadAndInstall(context: Context) {
+        val prompt = _updatePrompt.value ?: return
+        _updateDownloading.value = true
+        _updatePrompt.value = null
+        viewModelScope.launch {
+            val file = UpdateChecker.downloadApk(context, prompt.apkUrl) { pct ->
+                _updateDownloadProgress.value = pct
+            }
+            _updateDownloading.value = false
+            _updateDownloadProgress.value = 0
+            if (file != null) {
+                val prefs = context.getSharedPreferences("osu_radio_update", Context.MODE_PRIVATE)
+                prefs.edit().putString("pending_success_version", prompt.latestVersion).apply()
+                UpdateChecker.installApk(context, file)
             }
         }
     }
@@ -158,7 +244,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _isPlaying.value = true
         val service = musicService ?: return
         service.setTransition(_settings.value.audioTransition)
-        service.playAudio(song.audioPath)
+        service.playAudio(song.audioPath, song.title, song.artist, song.imagePath)
         service.getPlayer().addListener(object : androidx.media3.common.Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == androidx.media3.common.Player.STATE_ENDED) {
@@ -279,9 +365,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _playlists.value = ConfigManager.getPlaylists()
     }
 
-    fun playPlaylist(playlist: Playlist) {
-        val playlistSongs = _songs.value.filter { playlist.songIds.contains(it.id) }
+    fun playPlaylist(playlist: Playlist, shuffle: Boolean = false) {
+        var playlistSongs = _songs.value.filter { playlist.songIds.contains(it.id) }
         if (playlistSongs.isNotEmpty()) {
+            if (shuffle) playlistSongs = playlistSongs.shuffled()
             _queue.value = playlistSongs
             playSong(playlistSongs.first())
         }
