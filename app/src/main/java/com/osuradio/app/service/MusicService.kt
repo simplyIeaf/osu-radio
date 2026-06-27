@@ -16,7 +16,6 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.osuradio.app.MainActivity
@@ -53,10 +52,7 @@ class MusicService : MediaSessionService() {
                 .setUsage(C.USAGE_MEDIA)
                 .build()
 
-            val renderersFactory = DefaultRenderersFactory(this)
-                .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
-
-            player = ExoPlayer.Builder(this, renderersFactory)
+            player = ExoPlayer.Builder(this)
                 .setAudioAttributes(audioAttributes, true)
                 .setHandleAudioBecomingNoisy(true)
                 .build()
