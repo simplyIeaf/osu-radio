@@ -8,7 +8,6 @@ Android music player that lets you play osu! beatmap songs
 • Automatic updater (prompts you to update to vx.x.x inside the app when a new version is released in the repository)\
 more features are coming soon, so stay tuned!
 
-
 ## Setup
 ### osu!droid
 1. Download & Install [osu!droid](https://github.com/osudroid/osu-droid) if you haven't already
@@ -36,9 +35,12 @@ Go inside the cloned repository:
 ```
 cd osu-radio
 ```
-Give gradlew permission & build:
+Give **gradlew** permission & build:
 ```
 chmod +x ./gradlew
 ./gradlew assembleDebug
 ```
+
+## License
+osu!radio is licensed under the [MIT](https://opensource.org/license/mit) License. Please see the [LICENSE](https://github.com/simplyIeaf/osu-radio/blob/main/LICENSE) file for more information.
 
