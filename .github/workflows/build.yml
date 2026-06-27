@@ -1,10 +1,6 @@
-name: Build Debug APK
+name: Build APK
 
 on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
