@@ -24,7 +24,9 @@ data class AppSettings(
     val audioTransition: AudioTransition = AudioTransition.FADE_IN_OUT,
     val shuffle: Boolean = false,
     val repeat: RepeatMode = RepeatMode.NONE,
-    val volume: Float = 1.0f
+    val volume: Float = 1.0f,
+    val autoCheckUpdates: Boolean = true,
+    val lastDismissedVersion: String = ""
 )
 
 enum class RepeatMode {
