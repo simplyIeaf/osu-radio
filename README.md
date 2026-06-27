@@ -1,3 +1,7 @@
+<p align="center">
+  <img width="250" alt="osu!radio logo" src="assets/IMG_1501.png">
+</p>
+
 # osu!radio
 Android music player that lets you play osu! beatmap songs
 
