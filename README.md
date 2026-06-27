@@ -27,7 +27,7 @@ more features are coming soon, so stay tuned!
 <img src="https://github.com/simplyIeaf/osu-radio/blob/main/assets/Screenshot_20260627-190745_osu!radio.jpg" width="150" height="275"/>
 
 ## Building
-Linux machine (make sure JDK17 & Android SDK is installed)
+Requirements: Linux machine (make sure JDK17 & Android SDK is installed)
 Clone the repository:
 ```
 git clone https://github.com/simplyIeaf/osu-radio.git
