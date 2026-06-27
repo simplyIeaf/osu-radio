@@ -39,14 +39,14 @@ fun ModsPanel(
 
     val modLabels = mapOf(
         SongMod.NONE to "None",
-        SongMod.DAYCORE to "Daycore – slower + lower pitch",
-        SongMod.NIGHTCORE to "Nightcore – faster + higher pitch",
-        SongMod.DOUBLE_TIME to "Double Time – faster, same pitch",
-        SongMod.HALF_TIME to "Half Time – slower, same pitch",
-        SongMod.WIND_UP to "Wind Up – moderate speed + slight high",
-        SongMod.WIND_DOWN to "Wind Down – moderate slow + slight low",
-        SongMod.BASS_BOOST to "Bass Boost – pitch shift for low-end feel",
-        SongMod.VAPORWAVE to "Vaporwave – very slow + very low pitch",
+        SongMod.DAYCORE to "Daycore",
+        SongMod.NIGHTCORE to "Nightcore",
+        SongMod.DOUBLE_TIME to "Double Time",
+        SongMod.HALF_TIME to "Half Time",
+        SongMod.WIND_UP to "Wind Up",
+        SongMod.WIND_DOWN to "Wind Down",
+        SongMod.BASS_BOOST to "Bass Boost",
+        SongMod.VAPORWAVE to "Vaporwave",
         SongMod.CUSTOM_SPEED to "Custom Speed"
     )
 
@@ -55,13 +55,6 @@ fun ModsPanel(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Text(
-            text = "Mods",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(bottom = 12.dp)
-        )
-
         ExposedDropdownMenuBox(
             expanded = expanded,
             onExpandedChange = { expanded = !expanded }
@@ -70,7 +63,7 @@ fun ModsPanel(
                 value = modLabels[modSettings.activeMod] ?: "None",
                 onValueChange = {},
                 readOnly = true,
-                label = { Text("Active Mod") },
+                label = { Text("Mods") },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                 modifier = Modifier
                     .fillMaxWidth()
