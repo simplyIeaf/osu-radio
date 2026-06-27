@@ -5,15 +5,18 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.osuradio.app.MainActivity
@@ -26,6 +29,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.io.ByteArrayOutputStream
+import java.io.File
 
 class MusicService : MediaSessionService() {
     private val TAG = "MusicService"
@@ -35,9 +40,6 @@ class MusicService : MediaSessionService() {
     private var transitionJob: Job? = null
     private var currentTransition: AudioTransition = AudioTransition.FADE_IN_OUT
     private val binder = LocalBinder()
-
-    // Bass boost via EqualityEffect requires AudioEffect — we simulate with volume/pitch only.
-    // True EQ requires root or AudioEffect API; we apply what ExoPlayer supports natively.
 
     inner class LocalBinder : Binder() {
         fun getService(): MusicService = this@MusicService
@@ -51,7 +53,10 @@ class MusicService : MediaSessionService() {
                 .setUsage(C.USAGE_MEDIA)
                 .build()
 
-            player = ExoPlayer.Builder(this)
+            val renderersFactory = DefaultRenderersFactory(this)
+                .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+
+            player = ExoPlayer.Builder(this, renderersFactory)
                 .setAudioAttributes(audioAttributes, true)
                 .setHandleAudioBecomingNoisy(true)
                 .build()
@@ -83,9 +88,37 @@ class MusicService : MediaSessionService() {
 
     fun getPlayer(): ExoPlayer = player
 
-    fun playAudio(path: String, startMs: Long = 0L) {
+    fun playAudio(
+        path: String,
+        title: String = "",
+        artist: String = "",
+        imagePath: String? = null,
+        startMs: Long = 0L
+    ) {
         try {
-            val mediaItem = MediaItem.fromUri(android.net.Uri.fromFile(java.io.File(path)))
+            val artBytes: ByteArray? = imagePath?.let {
+                try {
+                    val bmp = BitmapFactory.decodeFile(it) ?: return@let null
+                    val out = ByteArrayOutputStream()
+                    bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, out)
+                    out.toByteArray()
+                } catch (e: Exception) { null }
+            }
+
+            val metadata = MediaMetadata.Builder()
+                .setTitle(title.ifEmpty { File(path).nameWithoutExtension })
+                .setArtist(artist)
+                .setArtworkData(
+                    artBytes,
+                    if (artBytes != null) MediaMetadata.PICTURE_TYPE_FRONT_COVER else null
+                )
+                .build()
+
+            val mediaItem = MediaItem.Builder()
+                .setUri(android.net.Uri.fromFile(File(path)))
+                .setMediaMetadata(metadata)
+                .build()
+
             player.setMediaItem(mediaItem)
             player.prepare()
             if (startMs > 0) player.seekTo(startMs)
@@ -98,7 +131,7 @@ class MusicService : MediaSessionService() {
 
     fun previewAudio(path: String) {
         try {
-            val mediaItem = MediaItem.fromUri(android.net.Uri.fromFile(java.io.File(path)))
+            val mediaItem = MediaItem.fromUri(android.net.Uri.fromFile(File(path)))
             player.setMediaItem(mediaItem)
             player.prepare()
             player.seekTo(10_000L)
@@ -135,14 +168,14 @@ class MusicService : MediaSessionService() {
     private fun resolveModParams(modSettings: ModSettings): Pair<Float, Float> {
         return when (modSettings.activeMod) {
             SongMod.NONE -> Pair(1.0f, 1.0f)
-            SongMod.DAYCORE -> Pair(0.75f, 0.75f)        // slower + lower pitch
-            SongMod.NIGHTCORE -> Pair(1.5f, 1.5f)         // faster + higher pitch
-            SongMod.DOUBLE_TIME -> Pair(1.5f, 1.0f)       // faster, pitch unchanged
-            SongMod.HALF_TIME -> Pair(0.75f, 1.0f)        // slower, pitch unchanged
-            SongMod.WIND_UP -> Pair(1.3f, 1.1f)           // gradual-feel: moderately fast + slightly high
-            SongMod.WIND_DOWN -> Pair(0.8f, 0.9f)         // moderately slow + slightly low
-            SongMod.BASS_BOOST -> Pair(1.0f, 0.85f)       // pitch shift down simulates bass boost
-            SongMod.VAPORWAVE -> Pair(0.7f, 0.7f)         // slow + very low pitch, vaporwave aesthetic
+            SongMod.DAYCORE -> Pair(0.75f, 0.75f)
+            SongMod.NIGHTCORE -> Pair(1.5f, 1.5f)
+            SongMod.DOUBLE_TIME -> Pair(1.5f, 1.0f)
+            SongMod.HALF_TIME -> Pair(0.75f, 1.0f)
+            SongMod.WIND_UP -> Pair(1.3f, 1.1f)
+            SongMod.WIND_DOWN -> Pair(0.8f, 0.9f)
+            SongMod.BASS_BOOST -> Pair(1.0f, 0.85f)
+            SongMod.VAPORWAVE -> Pair(0.7f, 0.7f)
             SongMod.CUSTOM_SPEED -> Pair(modSettings.customSpeed, modSettings.customSpeed)
         }
     }
