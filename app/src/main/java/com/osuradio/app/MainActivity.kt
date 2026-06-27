@@ -8,11 +8,12 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -26,7 +27,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Settings
@@ -36,27 +36,32 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.osuradio.app.data.AnimationStyle
 import com.osuradio.app.ui.components.MiniPlayer
-import com.osuradio.app.ui.screens.ImportScreen
-import com.osuradio.app.ui.screens.LoadingScreen
 import com.osuradio.app.ui.screens.PlayerScreen
 import com.osuradio.app.ui.screens.PlaylistsScreen
 import com.osuradio.app.ui.screens.SettingsScreen
 import com.osuradio.app.ui.screens.SongsScreen
+import com.osuradio.app.ui.screens.LoadingScreen
 import com.osuradio.app.ui.theme.OsuRadioTheme
 import com.osuradio.app.viewmodel.MainViewModel
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -81,18 +86,6 @@ class MainActivity : ComponentActivity() {
         viewModel.initialize(this)
     }
 
-    private val importOszLauncher = registerForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let { viewModel.importOszFile(this, it) }
-    }
-
-    private val importZipLauncher = registerForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let { viewModel.importZipFile(this, it) }
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -104,8 +97,7 @@ class MainActivity : ComponentActivity() {
                 MainApp(
                     viewModel = viewModel,
                     animationStyle = settings.value.animationStyle,
-                    onImportOsz = { importOszLauncher.launch("*/*") },
-                    onImportZip = { importZipLauncher.launch("application/zip") }
+                    activity = this
                 )
             }
         }
@@ -139,11 +131,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleIncomingIntent(intent: Intent?) {
-        intent?.data?.let { uri ->
-            val name = uri.lastPathSegment ?: ""
-            if (name.endsWith(".osz") || name.endsWith(".osz.zip")) {
-                viewModel.importOszFile(this, uri)
-            }
+        val uri = when (intent?.action) {
+            Intent.ACTION_VIEW -> intent.data
+            Intent.ACTION_SEND -> intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+                ?: intent.data
+            else -> intent?.data
+        }
+        uri?.let {
+            viewModel.importOszFile(this, it)
         }
     }
 
@@ -164,23 +159,61 @@ data class NavTab(val label: String, val icon: ImageVector)
 fun MainApp(
     viewModel: MainViewModel,
     animationStyle: AnimationStyle,
-    onImportOsz: () -> Unit,
-    onImportZip: () -> Unit
+    activity: ComponentActivity
 ) {
     val isLoading = viewModel.isLoading.collectAsState()
     val currentSong = viewModel.currentSong.collectAsState()
     val isPlaying = viewModel.isPlaying.collectAsState()
     val currentPositionMs = viewModel.currentPositionMs.collectAsState()
+    val updatePrompt = viewModel.updatePrompt.collectAsState()
+    val updateDownloading = viewModel.updateDownloading.collectAsState()
+    val updateProgress = viewModel.updateDownloadProgress.collectAsState()
+    val successUpdateVersion = viewModel.successUpdateVersion.collectAsState()
 
     var showPlayer by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableIntStateOf(0) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     val tabs = listOf(
         NavTab("Songs", Icons.Filled.LibraryMusic),
         NavTab("Playlists", Icons.Filled.PlaylistPlay),
-        NavTab("Import", Icons.Filled.Download),
         NavTab("Settings", Icons.Filled.Settings)
     )
+
+    LaunchedEffect(successUpdateVersion.value) {
+        val ver = successUpdateVersion.value
+        if (!ver.isNullOrEmpty()) {
+            snackbarHostState.showSnackbar(
+                message = "osu!radio has been updated to $ver",
+                actionLabel = "OK"
+            )
+            viewModel.dismissSuccessUpdate()
+        }
+    }
+
+    LaunchedEffect(updatePrompt.value) {
+        val prompt = updatePrompt.value ?: return@LaunchedEffect
+        val result = snackbarHostState.showSnackbar(
+            message = "Would you like to update to ${prompt.latestVersion}?",
+            actionLabel = "Yes",
+            withDismissAction = true
+        )
+        when (result) {
+            SnackbarResult.ActionPerformed -> viewModel.startDownloadAndInstall(activity)
+            SnackbarResult.Dismissed -> viewModel.dismissUpdate()
+        }
+    }
+
+    LaunchedEffect(updateDownloading.value) {
+        if (updateDownloading.value) {
+            snackbarHostState.showSnackbar("Downloading update... ${updateProgress.value}%")
+        }
+    }
+
+    androidx.activity.compose.BackHandler(enabled = showPlayer) {
+        showPlayer = false
+    }
 
     if (isLoading.value) {
         LoadingScreen(message = viewModel.loadingMessage.collectAsState().value)
@@ -210,6 +243,7 @@ fun MainApp(
 
     if (!showPlayer) {
         Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             bottomBar = {
                 Column {
                     AnimatedVisibility(visible = currentSong.value != null) {
@@ -277,16 +311,10 @@ fun MainApp(
                             onSongClick = { song ->
                                 viewModel.playSong(song)
                                 showPlayer = true
-                            },
-                            onImportOsz = onImportOsz
+                            }
                         )
                         1 -> PlaylistsScreen(viewModel = viewModel)
-                        2 -> ImportScreen(
-                            viewModel = viewModel,
-                            onImportOsz = onImportOsz,
-                            onImportZip = onImportZip
-                        )
-                        3 -> SettingsScreen(viewModel = viewModel)
+                        2 -> SettingsScreen(viewModel = viewModel)
                     }
                 }
             }
