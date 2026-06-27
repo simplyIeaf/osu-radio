@@ -19,6 +19,8 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -26,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -58,73 +61,134 @@ fun SettingsScreen(viewModel: MainViewModel) {
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            SettingsSection(title = "Animation Style") {
-                SettingsDropdown(
-                    label = "Style",
-                    selected = animationLabels[settings.value.animationStyle] ?: "Slide",
-                    options = AnimationStyle.entries.map { animationLabels[it] ?: it.name },
-                    onSelect = { label ->
-                        val style = animationLabels.entries.first { it.value == label }.key
-                        viewModel.updateSettings(settings.value.copy(animationStyle = style))
-                    }
-                )
-            }
-        }
-
-        item {
-            SettingsSection(title = "Audio Transition") {
-                SettingsDropdown(
-                    label = "Transition",
-                    selected = transitionLabels[settings.value.audioTransition] ?: "Fade In/Out",
-                    options = AudioTransition.entries.map { transitionLabels[it] ?: it.name },
-                    onSelect = { label ->
-                        val transition = transitionLabels.entries.first { it.value == label }.key
-                        viewModel.updateSettings(settings.value.copy(audioTransition = transition))
-                    }
-                )
-            }
-        }
-
-        item {
-            SettingsSection(title = "About") {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Version",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = BuildConfig.VERSION_NAME,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 6.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = "Developer",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "@simplyIeaf",
-                        style = MaterialTheme.typography.bodyLarge,
+                        text = "Settings",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary
+                        modifier = Modifier.padding(bottom = 12.dp)
                     )
+
+                    SettingsDropdown(
+                        label = "App Animations",
+                        selected = animationLabels[settings.value.animationStyle] ?: "Slide",
+                        options = AnimationStyle.entries.map { animationLabels[it] ?: it.name },
+                        onSelect = { label ->
+                            val style = animationLabels.entries.first { it.value == label }.key
+                            viewModel.updateSettings(settings.value.copy(animationStyle = style))
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    SettingsDropdown(
+                        label = "Audio Transitions",
+                        selected = transitionLabels[settings.value.audioTransition] ?: "Fade In/Out",
+                        options = AudioTransition.entries.map { transitionLabels[it] ?: it.name },
+                        onSelect = { label ->
+                            val transition = transitionLabels.entries.first { it.value == label }.key
+                            viewModel.updateSettings(settings.value.copy(audioTransition = transition))
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 12.dp),
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Automatically check for updates",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Checks on app start (takes effect after restart)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = settings.value.autoCheckUpdates,
+                            onCheckedChange = { checked ->
+                                viewModel.updateSettings(settings.value.copy(autoCheckUpdates = checked))
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "About",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Version",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = BuildConfig.APP_VERSION,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 6.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Developer",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "@simplyIeaf",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
         }
@@ -149,7 +213,7 @@ private fun SettingsDropdown(
             value = selected,
             onValueChange = {},
             readOnly = true,
-            label = { Text(label) },
+            label = { Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier
                 .fillMaxWidth()
@@ -168,28 +232,6 @@ private fun SettingsDropdown(
                     }
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun SettingsSection(
-    title: String,
-    content: @Composable () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            content()
         }
     }
 }
