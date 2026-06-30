@@ -9,6 +9,8 @@ import android.net.Uri
 import android.os.IBinder
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
 import com.osuradio.app.BuildConfig
 import com.osuradio.app.data.AppSettings
 import com.osuradio.app.data.ModSettings
@@ -23,6 +25,7 @@ import com.osuradio.app.utils.OszImporter
 import com.osuradio.app.utils.SongScanner
 import com.osuradio.app.utils.UpdateChecker
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -86,18 +89,44 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private var musicService: MusicService? = null
     private var serviceBound = false
+    private var listenerAttachedPlayer: ExoPlayer? = null
+    private var positionUpdaterJob: Job? = null
+
+    private val playbackListener = object : Player.Listener {
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            if (playbackState == Player.STATE_ENDED) {
+                onSongEnded()
+            }
+        }
+    }
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             val localBinder = binder as? MusicService.LocalBinder
             musicService = localBinder?.getService()
             serviceBound = true
+            attachPlayerListener()
             startPositionUpdater()
         }
         override fun onServiceDisconnected(name: ComponentName?) {
             musicService = null
             serviceBound = false
         }
+    }
+
+    private fun attachPlayerListener() {
+        val player = musicService?.getPlayer() ?: return
+        if (listenerAttachedPlayer === player) return
+        listenerAttachedPlayer?.removeListener(playbackListener)
+        player.addListener(playbackListener)
+        listenerAttachedPlayer = player
+    }
+
+    override fun onCleared() {
+        listenerAttachedPlayer?.removeListener(playbackListener)
+        listenerAttachedPlayer = null
+        positionUpdaterJob?.cancel()
+        super.onCleared()
     }
 
     fun bindMusicService(context: Context) {
@@ -225,7 +254,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun startPositionUpdater() {
-        viewModelScope.launch {
+        positionUpdaterJob?.cancel()
+        positionUpdaterJob = viewModelScope.launch {
             while (true) {
                 val service = musicService
                 if (service != null && service.getPlayer().isPlaying) {
@@ -245,13 +275,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val service = musicService ?: return
         service.setTransition(_settings.value.audioTransition)
         service.playAudio(song.audioPath, song.title, song.artist, song.imagePath)
-        service.getPlayer().addListener(object : androidx.media3.common.Player.Listener {
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == androidx.media3.common.Player.STATE_ENDED) {
-                    onSongEnded()
-                }
-            }
-        })
     }
 
     fun previewSong(song: Song) {
