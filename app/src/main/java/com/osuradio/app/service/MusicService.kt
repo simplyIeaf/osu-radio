@@ -26,6 +26,7 @@ import com.osuradio.app.utils.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
@@ -95,9 +96,13 @@ class MusicService : MediaSessionService() {
             val artBytes: ByteArray? = imagePath?.let {
                 try {
                     val bmp = BitmapFactory.decodeFile(it) ?: return@let null
-                    val out = ByteArrayOutputStream()
-                    bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, out)
-                    out.toByteArray()
+                    try {
+                        val out = ByteArrayOutputStream()
+                        bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, out)
+                        out.toByteArray()
+                    } finally {
+                        bmp.recycle()
+                    }
                 } catch (e: Exception) { null }
             }
 
@@ -259,6 +264,7 @@ class MusicService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        scope.cancel()
         mediaSession?.run {
             player.release()
             release()
