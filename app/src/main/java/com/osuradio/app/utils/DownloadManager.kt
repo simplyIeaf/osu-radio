@@ -67,12 +67,12 @@ class DownloadManager(
     private suspend fun downloadSet(set: NerinyanBeatmapSet) {
         val notificationId = NOTIFICATION_ID_BASE + (set.id % 100000).toInt()
         updateTask(set.id, set.title, set.artist, 0)
-        showProgressNotification(notificationId, set, 0)
+        showProgressNotification(notificationId, set, 0, indeterminate = false)
 
         val tempFile = File(context.cacheDir, "download_${set.id}.osz")
         val success = NerinyanApi.downloadBeatmapset(set.id, tempFile) { pct ->
-            updateTask(set.id, set.title, set.artist, pct)
-            showProgressNotification(notificationId, set, pct)
+            updateTask(set.id, set.title, set.artist, pct ?: 0)
+            showProgressNotification(notificationId, set, pct ?: 0, indeterminate = pct == null)
         }
 
         if (success) {
@@ -97,12 +97,17 @@ class DownloadManager(
         _activeDownloads.value = current
     }
 
-    private fun showProgressNotification(notificationId: Int, set: NerinyanBeatmapSet, progress: Int) {
+    private fun showProgressNotification(
+        notificationId: Int,
+        set: NerinyanBeatmapSet,
+        progress: Int,
+        indeterminate: Boolean
+    ) {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle("Downloading ${set.title}")
-            .setContentText("${set.artist} • $progress%")
+            .setContentText(if (indeterminate) set.artist else "${set.artist} • $progress%")
             .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setProgress(100, progress, false)
+            .setProgress(100, progress, indeterminate)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .build()
