@@ -3,6 +3,7 @@ package com.osuradio.app.ui.screens
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBackIosNew
+import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -29,6 +31,7 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,6 +40,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -48,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -57,6 +62,7 @@ import com.osuradio.app.data.RepeatMode
 import com.osuradio.app.ui.components.ModsPanel
 import com.osuradio.app.viewmodel.MainViewModel
 import java.util.concurrent.TimeUnit
+import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,8 +77,10 @@ fun PlayerScreen(
     val modSettings = viewModel.modSettings.collectAsState()
 
     var showMods by remember { mutableStateOf(false) }
+    var showSleepTimer by remember { mutableStateOf(false) }
     val modsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scrollState = rememberScrollState()
+    val sleepTimerEndAtMs = viewModel.sleepTimerEndAtMs.collectAsState()
 
     val song = currentSong.value ?: return
 
@@ -113,6 +121,14 @@ fun PlayerScreen(
                     modifier = Modifier.weight(1f),
                     textAlign = TextAlign.Center
                 )
+                IconButton(onClick = { showSleepTimer = true }) {
+                    Icon(
+                        Icons.Filled.Bedtime,
+                        contentDescription = "Sleep timer",
+                        tint = if (sleepTimerEndAtMs.value != null)
+                            MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground
+                    )
+                }
                 IconButton(onClick = { showMods = true }) {
                     Icon(
                         Icons.Filled.Tune,
@@ -132,6 +148,21 @@ fun PlayerScreen(
                     .shadow(24.dp, RoundedCornerShape(20.dp))
                     .clip(RoundedCornerShape(20.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .pointerInput(song.id) {
+                        var totalDrag = 0f
+                        detectHorizontalDragGestures(
+                            onDragStart = { totalDrag = 0f },
+                            onDragEnd = {
+                                if (abs(totalDrag) > 120f) {
+                                    if (totalDrag < 0) viewModel.skipToNext() else viewModel.skipToPrev()
+                                }
+                                totalDrag = 0f
+                            },
+                            onHorizontalDrag = { _, dragAmount ->
+                                totalDrag += dragAmount
+                            }
+                        )
+                    }
             ) {
                 if (song.imagePath != null) {
                     AsyncImage(
@@ -284,6 +315,51 @@ fun PlayerScreen(
             )
             Spacer(modifier = Modifier.height(24.dp))
         }
+    }
+
+    if (showSleepTimer) {
+        val options = listOf(5, 10, 15, 30, 45, 60)
+        AlertDialog(
+            onDismissRequest = { showSleepTimer = false },
+            title = { Text("Sleep timer") },
+            text = {
+                Column {
+                    if (sleepTimerEndAtMs.value != null) {
+                        Text(
+                            "Timer is running",
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+                    }
+                    options.forEach { minutes ->
+                        TextButton(
+                            onClick = {
+                                viewModel.startSleepTimer(minutes)
+                                showSleepTimer = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("$minutes minutes")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (sleepTimerEndAtMs.value != null) {
+                    TextButton(onClick = {
+                        viewModel.cancelSleepTimer()
+                        showSleepTimer = false
+                    }) {
+                        Text("Cancel timer")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSleepTimer = false }) {
+                    Text("Close")
+                }
+            }
+        )
     }
 }
 
