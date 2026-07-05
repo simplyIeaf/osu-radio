@@ -5,10 +5,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenu
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -53,9 +53,10 @@ fun DownloadSortPanel(
                     .menuAnchor(),
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sortExpanded) }
             )
-            ExposedDropdownMenu(
+            DropdownMenu(
                 expanded = sortExpanded,
-                onDismissRequest = { sortExpanded = false }
+                onDismissRequest = { sortExpanded = false },
+                modifier = Modifier.fillMaxWidth()
             ) {
                 NerinyanApi.SortOption.entries.forEach { option ->
                     DropdownMenuItem(
@@ -90,9 +91,10 @@ fun DownloadSortPanel(
                     .menuAnchor(),
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = statusExpanded) }
             )
-            ExposedDropdownMenu(
+            DropdownMenu(
                 expanded = statusExpanded,
-                onDismissRequest = { statusExpanded = false }
+                onDismissRequest = { statusExpanded = false },
+                modifier = Modifier.fillMaxWidth()
             ) {
                 NerinyanApi.StatusOption.entries.forEach { option ->
                     DropdownMenuItem(
