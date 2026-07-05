@@ -48,7 +48,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.osuradio.app.data.NerinyanBeatmapSet
-import com.osuradio.app.network.NerinyanApi
 import com.osuradio.app.ui.components.DownloadSortPanel
 import com.osuradio.app.viewmodel.MainViewModel
 import java.util.concurrent.TimeUnit
@@ -227,8 +226,16 @@ private fun BeatmapSetCard(
                 .clip(RoundedCornerShape(8.dp))
                 .background(MaterialTheme.colorScheme.surface)
         ) {
+            Icon(
+                imageVector = Icons.Filled.MusicNote,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .size(28.dp)
+                    .align(Alignment.Center)
+            )
             AsyncImage(
-                model = NerinyanApi.backgroundImageUrl(set.id),
+                model = "https://assets.ppy.sh/beatmaps/${set.id}/covers/raw.jpg",
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
