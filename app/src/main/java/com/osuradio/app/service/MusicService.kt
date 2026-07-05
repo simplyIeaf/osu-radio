@@ -15,6 +15,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackParameters
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -38,6 +39,8 @@ class MusicService : MediaSessionService() {
     private lateinit var player: ExoPlayer
     private val scope = CoroutineScope(Dispatchers.Main + Job())
     private var transitionJob: Job? = null
+    private var previewJob: Job? = null
+    private var modRampJob: Job? = null
     private var currentTransition: AudioTransition = AudioTransition.FADE_IN_OUT
     private val binder = LocalBinder()
 
@@ -53,7 +56,11 @@ class MusicService : MediaSessionService() {
                 .setUsage(C.USAGE_MEDIA)
                 .build()
 
-            player = ExoPlayer.Builder(this)
+            val renderersFactory = DefaultRenderersFactory(this)
+                .setEnableAudioFloatOutput(true)
+                .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+
+            player = ExoPlayer.Builder(this, renderersFactory)
                 .setAudioAttributes(audioAttributes, true)
                 .setHandleAudioBecomingNoisy(true)
                 .build()
@@ -132,12 +139,13 @@ class MusicService : MediaSessionService() {
 
     fun previewAudio(path: String) {
         try {
+            previewJob?.cancel()
             val mediaItem = MediaItem.fromUri(android.net.Uri.fromFile(File(path)))
             player.setMediaItem(mediaItem)
             player.prepare()
             player.seekTo(10_000L)
             player.play()
-            scope.launch {
+            previewJob = scope.launch {
                 delay(10_000L)
                 stopWithTransition()
             }
@@ -150,19 +158,44 @@ class MusicService : MediaSessionService() {
         if (player.isPlaying) player.pause() else player.play()
     }
 
+    fun pause() {
+        player.pause()
+    }
+
     fun seekTo(positionMs: Long) {
         player.seekTo(positionMs)
     }
 
     fun applyMod(modSettings: ModSettings, currentPositionMs: Long) {
         try {
-            val (speed, pitch) = resolveModParams(modSettings)
+            modRampJob?.cancel()
             val wasPlaying = player.isPlaying
-            player.setPlaybackParameters(PlaybackParameters(speed, pitch))
+            when (modSettings.activeMod) {
+                SongMod.WIND_UP -> startModRamp(startSpeed = 1.0f, endSpeed = 1.8f, durationMs = 45_000L)
+                SongMod.WIND_DOWN -> startModRamp(startSpeed = 1.0f, endSpeed = 0.6f, durationMs = 45_000L)
+                else -> {
+                    val (speed, pitch) = resolveModParams(modSettings)
+                    player.setPlaybackParameters(PlaybackParameters(speed, pitch))
+                }
+            }
             player.seekTo(currentPositionMs)
             if (wasPlaying) player.play()
         } catch (e: Exception) {
             Logger.error(TAG, "Failed to apply mod", e)
+        }
+    }
+
+    private fun startModRamp(startSpeed: Float, endSpeed: Float, durationMs: Long) {
+        player.setPlaybackParameters(PlaybackParameters(startSpeed, startSpeed))
+        val steps = 60
+        val stepDelay = durationMs / steps
+        modRampJob = scope.launch {
+            for (i in 1..steps) {
+                delay(stepDelay)
+                val fraction = i / steps.toFloat()
+                val speed = startSpeed + (endSpeed - startSpeed) * fraction
+                player.setPlaybackParameters(PlaybackParameters(speed, speed))
+            }
         }
     }
 
@@ -263,7 +296,18 @@ class MusicService : MediaSessionService() {
         }
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        val currentPlayer = mediaSession?.player
+        if (currentPlayer == null || !currentPlayer.playWhenReady || currentPlayer.mediaItemCount == 0) {
+            stopSelf()
+        }
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
+        transitionJob?.cancel()
+        previewJob?.cancel()
+        modRampJob?.cancel()
         scope.cancel()
         mediaSession?.run {
             player.release()
