@@ -106,10 +106,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _downloadSearchQuery = MutableStateFlow("")
     val downloadSearchQuery: StateFlow<String> = _downloadSearchQuery.asStateFlow()
 
-    private val _downloadSortOption = MutableStateFlow(NerinyanApi.SortOption.DEFAULT)
+    private val _downloadSortOption = MutableStateFlow(NerinyanApi.SortOption.PLAY_COUNT)
     val downloadSortOption: StateFlow<NerinyanApi.SortOption> = _downloadSortOption.asStateFlow()
 
-    private val _downloadStatusOption = MutableStateFlow(NerinyanApi.StatusOption.ALL)
+    private val _downloadStatusOption = MutableStateFlow(NerinyanApi.StatusOption.RANKED)
     val downloadStatusOption: StateFlow<NerinyanApi.StatusOption> = _downloadStatusOption.asStateFlow()
 
     private val _downloadResults = MutableStateFlow<List<NerinyanBeatmapSet>>(emptyList())
