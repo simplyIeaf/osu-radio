@@ -29,22 +29,6 @@ more features are coming soon, so stay tuned!
 <img src="https://github.com/simplyIeaf/osu-radio/blob/main/assets/Screenshot_20260627-190737_osu!radio.jpg" width="150" height="275"/>
 <img src="https://github.com/simplyIeaf/osu-radio/blob/main/assets/Screenshot_20260627-190745_osu!radio.jpg" width="150" height="275"/>
 
-## Building
-Requirements: Linux machine (make sure JDK17 & Android SDK is installed)\
-Clone the repository:
-```
-git clone https://github.com/simplyIeaf/osu-radio.git
-```
-Go inside the cloned repository:
-```
-cd osu-radio
-```
-Give **gradlew** permission & build:
-```
-chmod +x ./gradlew
-./gradlew assembleDebug
-```
-
 ## License
 osu!radio is licensed under the [MIT](https://opensource.org/license/mit) License. Please see the [LICENSE](https://github.com/simplyIeaf/osu-radio/blob/main/LICENSE) file for more information.
 
