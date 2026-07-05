@@ -13,15 +13,19 @@ Android music player that lets you play osu! beatmap songs
 more features are coming soon, so stay tuned!
 
 ## Setup
+### Built-in Downloader (Recommended)
+1. Download & open osu!radio
+2. Press the Download tab
+3. Download songs your choice & the downloaded beatmap(s) should be inside of osu!radio in the Songs tab
 ### osu!droid
 1. Download & Install [osu!droid](https://github.com/osudroid/osu-droid) if you haven't already
 2. Open the game (allow the permissions asked), once everything is loaded, press the button on the right side & download beatmaps your choice
-3. Open osu!radio, wait till everything loads & the downloaded beatmap(s) should be inside if osu!radio
+3. Open osu!radio, wait till everything loads & the downloaded beatmap(s) should be inside of osu!radio in the Songs tab
 ### Manual
 1. Go to the official osu! website, press beatmaps & then beatmap listing (if your lazy, [here](https://osu.ppy.sh/beatmapsets))
 2. Select & download beatmaps your choice (you need to login onto your osu! account to download beatmaps)
 3. Open file manager, navigate to the downloaded beatmap (.osz), select it & press **Share** (or share icon depending on the file manager you use)
-4. Select osu!radio, wait till everything loads & the downloaded beatmap(s) should be inside of osu!radio
+4. Select osu!radio, wait till everything loads & the downloaded beatmap(s) should be inside of osu!radio in the Songs tab
 > [!NOTE]
 > Multi-selecting ths beatmaps & pressing Share **might** not work
 
