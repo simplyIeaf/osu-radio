@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Settings
@@ -53,8 +54,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.osuradio.app.data.AnimationStyle
+import com.osuradio.app.data.Playlist
 import com.osuradio.app.ui.components.MiniPlayer
+import com.osuradio.app.ui.screens.DownloadScreen
 import com.osuradio.app.ui.screens.PlayerScreen
+import com.osuradio.app.ui.screens.PlaylistDetailScreen
 import com.osuradio.app.ui.screens.PlaylistsScreen
 import com.osuradio.app.ui.screens.SettingsScreen
 import com.osuradio.app.ui.screens.SongsScreen
@@ -169,15 +173,18 @@ fun MainApp(
     val updateDownloading = viewModel.updateDownloading.collectAsState()
     val updateProgress = viewModel.updateDownloadProgress.collectAsState()
     val successUpdateVersion = viewModel.successUpdateVersion.collectAsState()
+    val updateFailed = viewModel.updateFailed.collectAsState()
 
     var showPlayer by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedPlaylist by remember { mutableStateOf<Playlist?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
     val tabs = listOf(
         NavTab("Songs", Icons.Filled.LibraryMusic),
         NavTab("Playlists", Icons.Filled.PlaylistPlay),
+        NavTab("Download", Icons.Filled.Download),
         NavTab("Settings", Icons.Filled.Settings)
     )
 
@@ -211,8 +218,30 @@ fun MainApp(
         }
     }
 
+    LaunchedEffect(updateFailed.value) {
+        if (updateFailed.value) {
+            val result = snackbarHostState.showSnackbar(
+                message = "Update failed to download",
+                actionLabel = "Open",
+                withDismissAction = true
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                val intent = Intent(
+                    Intent.ACTION_VIEW,
+                    Uri.parse("https://github.com/simplyIeaf/osu-radio/releases")
+                )
+                activity.startActivity(intent)
+            }
+            viewModel.dismissUpdateFailed()
+        }
+    }
+
     androidx.activity.compose.BackHandler(enabled = showPlayer) {
         showPlayer = false
+    }
+
+    androidx.activity.compose.BackHandler(enabled = !showPlayer && selectedPlaylist != null) {
+        selectedPlaylist = null
     }
 
     if (isLoading.value) {
@@ -313,8 +342,24 @@ fun MainApp(
                                 showPlayer = true
                             }
                         )
-                        1 -> PlaylistsScreen(viewModel = viewModel)
-                        2 -> SettingsScreen(viewModel = viewModel)
+                        1 -> {
+                            val playlist = selectedPlaylist
+                            if (playlist != null) {
+                                PlaylistDetailScreen(
+                                    viewModel = viewModel,
+                                    playlist = playlist,
+                                    onBack = { selectedPlaylist = null },
+                                    onSongClick = { showPlayer = true }
+                                )
+                            } else {
+                                PlaylistsScreen(
+                                    viewModel = viewModel,
+                                    onOpenPlaylist = { selectedPlaylist = it }
+                                )
+                            }
+                        }
+                        2 -> DownloadScreen(viewModel = viewModel)
+                        3 -> SettingsScreen(viewModel = viewModel)
                     }
                 }
             }
