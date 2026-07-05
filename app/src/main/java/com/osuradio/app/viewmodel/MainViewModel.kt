@@ -14,18 +14,23 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.osuradio.app.BuildConfig
 import com.osuradio.app.data.AppSettings
 import com.osuradio.app.data.ModSettings
+import com.osuradio.app.data.NerinyanBeatmapSet
 import com.osuradio.app.data.Playlist
 import com.osuradio.app.data.RepeatMode
 import com.osuradio.app.data.Song
 import com.osuradio.app.data.SongMod
+import com.osuradio.app.network.NerinyanApi
 import com.osuradio.app.service.MusicService
 import com.osuradio.app.utils.ConfigManager
+import com.osuradio.app.utils.DownloadManager
+import com.osuradio.app.utils.DownloadTask
 import com.osuradio.app.utils.Logger
 import com.osuradio.app.utils.OszImporter
 import com.osuradio.app.utils.SongScanner
 import com.osuradio.app.utils.UpdateChecker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -87,6 +92,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _successUpdateVersion = MutableStateFlow<String?>(null)
     val successUpdateVersion: StateFlow<String?> = _successUpdateVersion.asStateFlow()
 
+    private val _updateFailed = MutableStateFlow(false)
+    val updateFailed: StateFlow<Boolean> = _updateFailed.asStateFlow()
+
+    private val _sleepTimerEndAtMs = MutableStateFlow<Long?>(null)
+    val sleepTimerEndAtMs: StateFlow<Long?> = _sleepTimerEndAtMs.asStateFlow()
+    private var sleepTimerJob: Job? = null
+
+    private val downloadManager: DownloadManager by lazy {
+        DownloadManager(getApplication()) { song -> mergeSong(song) }
+    }
+
+    private val _downloadSearchQuery = MutableStateFlow("")
+    val downloadSearchQuery: StateFlow<String> = _downloadSearchQuery.asStateFlow()
+
+    private val _downloadSortOption = MutableStateFlow(NerinyanApi.SortOption.DEFAULT)
+    val downloadSortOption: StateFlow<NerinyanApi.SortOption> = _downloadSortOption.asStateFlow()
+
+    private val _downloadStatusOption = MutableStateFlow(NerinyanApi.StatusOption.ALL)
+    val downloadStatusOption: StateFlow<NerinyanApi.StatusOption> = _downloadStatusOption.asStateFlow()
+
+    private val _downloadResults = MutableStateFlow<List<NerinyanBeatmapSet>>(emptyList())
+    val downloadResults: StateFlow<List<NerinyanBeatmapSet>> = _downloadResults.asStateFlow()
+
+    private val _downloadLoading = MutableStateFlow(false)
+    val downloadLoading: StateFlow<Boolean> = _downloadLoading.asStateFlow()
+
+    val activeDownloads: StateFlow<List<DownloadTask>> = downloadManager.activeDownloads
+    val queuedDownloadIds: StateFlow<Set<Long>> = downloadManager.queuedIds
+
+    private var downloadPage = 0
+    private var downloadHasMore = true
+    private var downloadSearchJob: Job? = null
+
     private var musicService: MusicService? = null
     private var serviceBound = false
     private var listenerAttachedPlayer: ExoPlayer? = null
@@ -126,6 +164,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         listenerAttachedPlayer?.removeListener(playbackListener)
         listenerAttachedPlayer = null
         positionUpdaterJob?.cancel()
+        sleepTimerJob?.cancel()
+        downloadManager.release()
         super.onCleared()
     }
 
@@ -140,6 +180,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             context.unbindService(serviceConnection)
             serviceBound = false
         }
+        positionUpdaterJob?.cancel()
+        listenerAttachedPlayer?.removeListener(playbackListener)
+        listenerAttachedPlayer = null
+        musicService = null
     }
 
     fun initialize(context: Context) {
@@ -249,8 +293,95 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val prefs = context.getSharedPreferences("osu_radio_update", Context.MODE_PRIVATE)
                 prefs.edit().putString("pending_success_version", prompt.latestVersion).apply()
                 UpdateChecker.installApk(context, file)
+            } else {
+                _updateFailed.value = true
             }
         }
+    }
+
+    fun dismissUpdateFailed() {
+        _updateFailed.value = false
+    }
+
+    fun startSleepTimer(minutes: Int) {
+        sleepTimerJob?.cancel()
+        _sleepTimerEndAtMs.value = System.currentTimeMillis() + minutes * 60_000L
+        sleepTimerJob = viewModelScope.launch {
+            delay(minutes * 60_000L)
+            pausePlayback()
+            _sleepTimerEndAtMs.value = null
+        }
+    }
+
+    fun cancelSleepTimer() {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        _sleepTimerEndAtMs.value = null
+    }
+
+    fun pausePlayback() {
+        musicService?.pause()
+        _isPlaying.value = false
+    }
+
+    fun setDownloadSearchQuery(query: String) {
+        _downloadSearchQuery.value = query
+        downloadSearchJob?.cancel()
+        downloadSearchJob = viewModelScope.launch {
+            delay(400)
+            refreshDownloadSearch()
+        }
+    }
+
+    fun setDownloadSortOption(option: NerinyanApi.SortOption) {
+        _downloadSortOption.value = option
+        refreshDownloadSearch()
+    }
+
+    fun setDownloadStatusOption(option: NerinyanApi.StatusOption) {
+        _downloadStatusOption.value = option
+        refreshDownloadSearch()
+    }
+
+    fun refreshDownloadSearch() {
+        downloadPage = 0
+        downloadHasMore = true
+        viewModelScope.launch {
+            _downloadLoading.value = true
+            val results = NerinyanApi.search(
+                query = _downloadSearchQuery.value,
+                page = downloadPage,
+                sort = _downloadSortOption.value,
+                status = _downloadStatusOption.value
+            )
+            _downloadResults.value = results
+            downloadHasMore = results.isNotEmpty()
+            _downloadLoading.value = false
+        }
+    }
+
+    fun loadMoreDownloadResults() {
+        if (!downloadHasMore || _downloadLoading.value) return
+        viewModelScope.launch {
+            _downloadLoading.value = true
+            downloadPage += 1
+            val results = NerinyanApi.search(
+                query = _downloadSearchQuery.value,
+                page = downloadPage,
+                sort = _downloadSortOption.value,
+                status = _downloadStatusOption.value
+            )
+            if (results.isEmpty()) {
+                downloadHasMore = false
+            } else {
+                _downloadResults.value = _downloadResults.value + results
+            }
+            _downloadLoading.value = false
+        }
+    }
+
+    fun downloadBeatmapset(set: NerinyanBeatmapSet) {
+        downloadManager.enqueue(set)
     }
 
     private fun startPositionUpdater() {
@@ -430,5 +561,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun getSongsForPlaylist(playlist: Playlist): List<Song> {
         return _songs.value.filter { playlist.songIds.contains(it.id) }
+    }
+
+    fun playPlaylistFrom(playlist: Playlist, song: Song) {
+        val playlistSongs = _songs.value.filter { playlist.songIds.contains(it.id) }
+        if (playlistSongs.isNotEmpty()) {
+            _queue.value = playlistSongs
+            playSong(song)
+        }
     }
 }
