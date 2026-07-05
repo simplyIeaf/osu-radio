@@ -1,5 +1,6 @@
 package com.osuradio.app.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,8 +19,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -49,7 +48,10 @@ import com.osuradio.app.viewmodel.MainViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PlaylistsScreen(viewModel: MainViewModel) {
+fun PlaylistsScreen(
+    viewModel: MainViewModel,
+    onOpenPlaylist: (Playlist) -> Unit
+) {
     val playlists = viewModel.playlists.collectAsState()
     var showCreateDialog by remember { mutableStateOf(false) }
     var newPlaylistName by remember { mutableStateOf("") }
@@ -83,8 +85,7 @@ fun PlaylistsScreen(viewModel: MainViewModel) {
                     PlaylistCard(
                         playlist = playlist,
                         songCount = viewModel.getSongsForPlaylist(playlist).size,
-                        onPlay = { viewModel.playPlaylist(playlist, shuffle = false) },
-                        onShuffle = { viewModel.playPlaylist(playlist, shuffle = true) },
+                        onOpen = { onOpenPlaylist(playlist) },
                         onDelete = { viewModel.deletePlaylist(playlist.id) }
                     )
                 }
@@ -143,14 +144,15 @@ fun PlaylistsScreen(viewModel: MainViewModel) {
 private fun PlaylistCard(
     playlist: Playlist,
     songCount: Int,
-    onPlay: () -> Unit,
-    onShuffle: () -> Unit,
+    onOpen: () -> Unit,
     onDelete: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpen),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
@@ -170,20 +172,6 @@ private fun PlaylistCard(
                     text = "$songCount songs",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            IconButton(onClick = onPlay) {
-                Icon(
-                    Icons.Filled.PlayArrow,
-                    contentDescription = "Play playlist",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-            IconButton(onClick = onShuffle) {
-                Icon(
-                    Icons.Filled.Shuffle,
-                    contentDescription = "Shuffle playlist",
-                    tint = MaterialTheme.colorScheme.primary
                 )
             }
             Box {
