@@ -235,7 +235,7 @@ private fun BeatmapSetCard(
                     .align(Alignment.Center)
             )
             AsyncImage(
-                model = "https://assets.ppy.sh/beatmaps/${set.id}/covers/raw.jpg",
+                model = "https://assets.ppy.sh/beatmaps/${set.id}/covers/list@2x.jpg",
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
