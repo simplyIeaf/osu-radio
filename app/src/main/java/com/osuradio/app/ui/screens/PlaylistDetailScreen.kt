@@ -55,7 +55,10 @@ fun PlaylistDetailScreen(
     onSongClick: (Song) -> Unit
 ) {
     val settings = viewModel.settings.collectAsState()
-    val songs = viewModel.getSongsForPlaylist(playlist)
+    val playlists = viewModel.playlists.collectAsState()
+    val allSongs = viewModel.songs.collectAsState()
+    val currentPlaylist = playlists.value.find { it.id == playlist.id } ?: playlist
+    val songs = allSongs.value.filter { currentPlaylist.songIds.contains(it.id) }
     val totalDurationMs = songs.sumOf { it.duration }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -72,13 +75,6 @@ fun PlaylistDetailScreen(
                     tint = MaterialTheme.colorScheme.onBackground
                 )
             }
-            Text(
-                text = playlist.name,
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -86,6 +82,20 @@ fun PlaylistDetailScreen(
         PlaylistCoverGrid(songs = songs)
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = currentPlaylist.name,
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         Text(
             text = "${songs.size} songs • ${formatPlaylistDuration(totalDurationMs)}",
@@ -104,13 +114,29 @@ fun PlaylistDetailScreen(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = { viewModel.playPlaylist(playlist, shuffle = true) }) {
+            IconButton(onClick = { viewModel.playPlaylist(currentPlaylist, shuffle = true) }) {
                 Icon(
                     Icons.Filled.Shuffle,
                     contentDescription = "Shuffle",
                     tint = if (settings.value.shuffle) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+            Spacer(modifier = Modifier.width(24.dp))
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center
+            ) {
+                IconButton(onClick = { viewModel.playPlaylist(currentPlaylist, shuffle = false) }) {
+                    Icon(
+                        Icons.Filled.PlayArrow,
+                        contentDescription = "Play",
+                        tint = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
             }
             Spacer(modifier = Modifier.width(24.dp))
             IconButton(onClick = { viewModel.toggleRepeat() }) {
@@ -123,22 +149,6 @@ fun PlaylistDetailScreen(
                     tint = if (settings.value.repeat != RepeatMode.NONE) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            }
-            Spacer(modifier = Modifier.width(24.dp))
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary),
-                contentAlignment = Alignment.Center
-            ) {
-                IconButton(onClick = { viewModel.playPlaylist(playlist, shuffle = false) }) {
-                    Icon(
-                        Icons.Filled.PlayArrow,
-                        contentDescription = "Play",
-                        tint = MaterialTheme.colorScheme.onPrimary
-                    )
-                }
             }
         }
 
@@ -160,8 +170,8 @@ fun PlaylistDetailScreen(
                 items(songs, key = { it.id }) { song ->
                     PlaylistSongRow(
                         song = song,
-                        onClick = { viewModel.playPlaylistFrom(playlist, song) },
-                        onRemove = { viewModel.removeSongFromPlaylist(playlist.id, song.id) }
+                        onClick = { viewModel.playPlaylistFrom(currentPlaylist, song) },
+                        onRemove = { viewModel.removeSongFromPlaylist(currentPlaylist.id, song.id) }
                     )
                 }
             }
