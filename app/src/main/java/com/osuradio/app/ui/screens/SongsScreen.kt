@@ -1,11 +1,5 @@
 package com.osuradio.app.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,7 +27,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,12 +51,6 @@ fun SongsScreen(
     val searchQuery = viewModel.searchQuery.collectAsState()
     val listState = rememberLazyListState()
 
-    val isAtTop by remember {
-        derivedStateOf {
-            listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
-        }
-    }
-
     var menuSong by remember { mutableStateOf<Song?>(null) }
     var showSongMenu by remember { mutableStateOf(false) }
     var menuAnchorSong by remember { mutableStateOf<Song?>(null) }
@@ -71,48 +58,36 @@ fun SongsScreen(
     val displayedSongs = viewModel.getFilteredSongs()
 
     Column(modifier = Modifier.fillMaxSize()) {
-        AnimatedVisibility(
-            visible = isAtTop,
-            enter = slideInVertically(
-                initialOffsetY = { -it },
-                animationSpec = tween(250)
-            ) + fadeIn(animationSpec = tween(200)),
-            exit = slideOutVertically(
-                targetOffsetY = { -it },
-                animationSpec = tween(200)
-            ) + fadeOut(animationSpec = tween(150))
-        ) {
-            OutlinedTextField(
-                value = searchQuery.value,
-                onValueChange = { viewModel.setSearchQuery(it) },
-                placeholder = { Text("Search songs or artists...") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                    unfocusedIndicatorColor = MaterialTheme.colorScheme.surfaceVariant
-                ),
-                leadingIcon = {
-                    Icon(
-                        Icons.Filled.Search,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                },
-                trailingIcon = {
-                    if (searchQuery.value.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.setSearchQuery("") }) {
-                            Icon(Icons.Filled.Close, contentDescription = "Clear")
-                        }
+        OutlinedTextField(
+            value = searchQuery.value,
+            onValueChange = { viewModel.setSearchQuery(it) },
+            placeholder = { Text("Search songs or artists...") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            shape = RoundedCornerShape(24.dp),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                unfocusedIndicatorColor = MaterialTheme.colorScheme.surfaceVariant
+            ),
+            leadingIcon = {
+                Icon(
+                    Icons.Filled.Search,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            trailingIcon = {
+                if (searchQuery.value.isNotEmpty()) {
+                    IconButton(onClick = { viewModel.setSearchQuery("") }) {
+                        Icon(Icons.Filled.Close, contentDescription = "Clear")
                     }
-                },
-                singleLine = true
-            )
-        }
+                }
+            },
+            singleLine = true
+        )
 
         if (displayedSongs.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
