@@ -94,7 +94,7 @@ object NerinyanApi {
     suspend fun downloadBeatmapset(
         beatmapsetId: Long,
         destination: File,
-        onProgress: (Int) -> Unit
+        onProgress: (Int?) -> Unit
     ): Boolean = withContext(Dispatchers.IO) {
         try {
             val url = "$BASE_URL/d/$beatmapsetId".toHttpUrl().newBuilder()
@@ -116,16 +116,24 @@ object NerinyanApi {
                 }
                 val body = response.body ?: return@withContext false
                 val totalBytes = body.contentLength()
+                onProgress(if (totalBytes > 0) 0 else null)
                 body.byteStream().use { input ->
                     destination.outputStream().use { output ->
                         val buffer = ByteArray(8192)
                         var downloaded = 0L
+                        var lastReportedPct = -1
                         var read: Int
                         while (input.read(buffer).also { read = it } != -1) {
                             output.write(buffer, 0, read)
                             downloaded += read
                             if (totalBytes > 0) {
-                                onProgress(((downloaded * 100) / totalBytes).toInt())
+                                val pct = ((downloaded * 100) / totalBytes).toInt()
+                                if (pct != lastReportedPct) {
+                                    lastReportedPct = pct
+                                    onProgress(pct)
+                                }
+                            } else {
+                                onProgress(null)
                             }
                         }
                     }
