@@ -53,7 +53,6 @@ object OszImporter {
                 }
             }
 
-            // Pick largest audio file if multiple (main track vs hitsounds)
             val audioFile = audioFiles.maxByOrNull { it.length() } ?: run {
                 outputFolder.deleteRecursively()
                 return null
@@ -83,7 +82,6 @@ object OszImporter {
             val osuRadioDir = SongScanner.getOsuRadioDir()
             val outputSongsDir = SongScanner.getOrCreateOutputSongsDir(osuRadioDir)
 
-            // Map from folder name -> files collected
             val folderAudioMap = mutableMapOf<String, MutableList<File>>()
             val folderImageMap = mutableMapOf<String, MutableList<File>>()
 
@@ -93,7 +91,6 @@ object OszImporter {
                     while (entry != null) {
                         if (!entry.isDirectory) {
                             val parts = entry.name.split("/")
-                            // Support both flat and nested (Songs/folder/file) layouts
                             val folderName = if (parts.size >= 2) parts[parts.size - 2] else "imported"
                             val fileName = parts.last()
                             val ext = fileName.substringAfterLast('.', "").lowercase()
@@ -144,6 +141,69 @@ object OszImporter {
         }
         return songs
     }
+
+    fun importOszFromFile(file: File, fallbackName: String): Song? {
+        return try {
+            val osuRadioDir = SongScanner.getOsuRadioDir()
+            val outputSongsDir = SongScanner.getOrCreateOutputSongsDir(osuRadioDir)
+            val baseName = sanitizeFolderName(fallbackName.ifBlank { file.nameWithoutExtension })
+            val outputFolder = File(outputSongsDir, baseName)
+            outputFolder.mkdirs()
+
+            val audioFiles = mutableListOf<File>()
+            val imageFiles = mutableListOf<File>()
+
+            ZipInputStream(file.inputStream()).use { zip ->
+                var entry = zip.nextEntry
+                while (entry != null) {
+                    if (!entry.isDirectory) {
+                        val entryName = File(entry.name).name
+                        val ext = entryName.substringAfterLast('.', "").lowercase()
+                        val isExcluded = EXCLUDED_PREFIXES.any { entryName.lowercase().startsWith(it) }
+
+                        when {
+                            !isExcluded && (ext == "mp3" || ext == "ogg") -> {
+                                val destFile = File(outputFolder, entryName)
+                                destFile.outputStream().use { out -> zip.copyTo(out) }
+                                audioFiles.add(destFile)
+                            }
+                            ext == "jpg" || ext == "jpeg" || ext == "png" -> {
+                                val destFile = File(outputFolder, entryName)
+                                destFile.outputStream().use { out -> zip.copyTo(out) }
+                                imageFiles.add(destFile)
+                            }
+                            else -> zip.closeEntry()
+                        }
+                    }
+                    zip.closeEntry()
+                    entry = zip.nextEntry
+                }
+            }
+
+            val audioFile = audioFiles.maxByOrNull { it.length() } ?: run {
+                outputFolder.deleteRecursively()
+                return null
+            }
+            val selectedImage = imageFiles.maxByOrNull { it.length() }
+            val (artist, title) = SongScanner.parseFolderName(baseName)
+
+            Song(
+                id = UUID.nameUUIDFromBytes(baseName.toByteArray()).toString(),
+                title = title,
+                artist = artist,
+                audioPath = audioFile.absolutePath,
+                imagePath = selectedImage?.absolutePath,
+                folderPath = outputFolder.absolutePath,
+                duration = 0L
+            )
+        } catch (e: Exception) {
+            Logger.error(TAG, "Failed to import downloaded beatmapset", e)
+            null
+        }
+    }
+
+    private fun sanitizeFolderName(name: String): String =
+        name.replace(Regex("[\\\\/:*?\"<>|]"), "_").take(120)
 
     private fun getFileName(context: Context, uri: Uri): String? {
         var name: String? = null
