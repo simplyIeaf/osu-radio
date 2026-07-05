@@ -62,17 +62,3 @@ jobs:
           name: osu-radio-debug-${{ steps.version.outputs.app_version }}-${{ github.sha }}
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
-
-      - name: Create full zip archive
-        run: |
-          zip -r osu-radio-full-${{ steps.version.outputs.app_version }}.zip . \
-            --exclude "*.git/*" \
-            --exclude "*/build/*" \
-            --exclude "*/.gradle/*"
-
-      - name: Upload full zip
-        uses: actions/upload-artifact@v4
-        with:
-          name: osu-radio-full-zip-${{ steps.version.outputs.app_version }}
-          path: osu-radio-full-${{ steps.version.outputs.app_version }}.zip
-          retention-days: 30
