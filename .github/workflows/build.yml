@@ -66,11 +66,16 @@ jobs:
           echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
           echo "app_version=$APP_VERSION" >> $GITHUB_OUTPUT
 
+      - name: Rename APK
+        run: |
+          mkdir -p out
+          cp app/build/outputs/apk/release/app-release.apk out/osu-radio-release-${{ steps.version.outputs.app_version }}-${{ github.sha }}.apk
+
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: osu-radio-release-${{ steps.version.outputs.app_version }}-${{ github.sha }}
-          path: app/build/outputs/apk/release/app-release.apk
+          path: out/osu-radio-release-${{ steps.version.outputs.app_version }}-${{ github.sha }}.apk
+          archive: false
           retention-days: 30
 
       - name: Remove decoded keystore
