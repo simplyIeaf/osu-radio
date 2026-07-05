@@ -31,7 +31,6 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,9 +38,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -57,10 +59,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import com.osuradio.app.data.RepeatMode
 import com.osuradio.app.ui.components.ModsPanel
 import com.osuradio.app.viewmodel.MainViewModel
+import java.util.Calendar
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 
@@ -121,7 +125,13 @@ fun PlayerScreen(
                     modifier = Modifier.weight(1f),
                     textAlign = TextAlign.Center
                 )
-                IconButton(onClick = { showSleepTimer = true }) {
+                IconButton(onClick = {
+                    if (sleepTimerEndAtMs.value != null) {
+                        viewModel.cancelSleepTimer()
+                    } else {
+                        showSleepTimer = true
+                    }
+                }) {
                     Icon(
                         Icons.Filled.Bedtime,
                         contentDescription = "Sleep timer",
@@ -318,48 +328,61 @@ fun PlayerScreen(
     }
 
     if (showSleepTimer) {
-        val options = listOf(5, 10, 15, 30, 45, 60)
-        AlertDialog(
-            onDismissRequest = { showSleepTimer = false },
-            title = { Text("Sleep timer") },
-            text = {
-                Column {
-                    if (sleepTimerEndAtMs.value != null) {
-                        Text(
-                            "Timer is running",
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(bottom = 12.dp)
-                        )
-                    }
-                    options.forEach { minutes ->
-                        TextButton(
-                            onClick = {
-                                viewModel.startSleepTimer(minutes)
-                                showSleepTimer = false
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("$minutes minutes")
+        val now = Calendar.getInstance()
+        val timePickerState = rememberTimePickerState(
+            initialHour = now.get(Calendar.HOUR_OF_DAY),
+            initialMinute = now.get(Calendar.MINUTE),
+            is24Hour = false
+        )
+        Dialog(onDismissRequest = { showSleepTimer = false }) {
+            Surface(
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surface
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Sleep at",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp)
+                    )
+                    TimePicker(state = timePickerState)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 16.dp),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = { showSleepTimer = false }) {
+                            Text("Cancel")
+                        }
+                        TextButton(onClick = {
+                            val target = Calendar.getInstance().apply {
+                                set(Calendar.HOUR_OF_DAY, timePickerState.hour)
+                                set(Calendar.MINUTE, timePickerState.minute)
+                                set(Calendar.SECOND, 0)
+                                set(Calendar.MILLISECOND, 0)
+                            }
+                            if (target.timeInMillis <= System.currentTimeMillis()) {
+                                target.add(Calendar.DAY_OF_YEAR, 1)
+                            }
+                            val minutes = ((target.timeInMillis - System.currentTimeMillis()) / 60_000L)
+                                .toInt()
+                                .coerceAtLeast(1)
+                            viewModel.startSleepTimer(minutes)
+                            showSleepTimer = false
+                        }) {
+                            Text("Start")
                         }
                     }
                 }
-            },
-            confirmButton = {
-                if (sleepTimerEndAtMs.value != null) {
-                    TextButton(onClick = {
-                        viewModel.cancelSleepTimer()
-                        showSleepTimer = false
-                    }) {
-                        Text("Cancel timer")
-                    }
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showSleepTimer = false }) {
-                    Text("Close")
-                }
             }
-        )
+        }
     }
 }
 
