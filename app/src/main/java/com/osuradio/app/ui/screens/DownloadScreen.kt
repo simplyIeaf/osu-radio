@@ -6,11 +6,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -61,7 +59,6 @@ fun DownloadScreen(viewModel: MainViewModel) {
     val results = viewModel.downloadResults.collectAsState()
     val loading = viewModel.downloadLoading.collectAsState()
     val queuedIds = viewModel.queuedDownloadIds.collectAsState()
-    val activeDownloads = viewModel.activeDownloads.collectAsState()
 
     var showSortSheet by remember { mutableStateOf(false) }
     val sortSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -127,27 +124,6 @@ fun DownloadScreen(viewModel: MainViewModel) {
                     contentDescription = "Sort and filter",
                     tint = MaterialTheme.colorScheme.primary
                 )
-            }
-        }
-
-        if (activeDownloads.value.isNotEmpty()) {
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                activeDownloads.value.forEach { task ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "${task.title} — ${task.progress}%",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
             }
         }
 
@@ -235,7 +211,7 @@ private fun BeatmapSetCard(
                     .align(Alignment.Center)
             )
             AsyncImage(
-                model = "https://assets.ppy.sh/beatmaps/${set.id}/covers/list@2x.jpg",
+                model = "https://assets.ppy.sh/beatmaps/${set.id}/covers/raw.jpg",
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
