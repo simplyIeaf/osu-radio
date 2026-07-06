@@ -3,7 +3,7 @@
 </p>
 
 # osu!radio
-[![Discord](https://dcbadge.limes.pink/api/server/https://discord.gg/hXtv87C8xq)](https://discord.gg/hXtv87C8xq)
+[![Discord](https://dcbadge.limes.pink/api/server/https://discord.gg/hXtv87C8xq)](https://discord.gg/hXtv87C8xq)\
 Android music player that lets you play osu! beatmap songs
 
 ## Features
