@@ -19,6 +19,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.ui.PlayerNotificationManager
 import com.osuradio.app.MainActivity
 import com.osuradio.app.data.AudioTransition
 import com.osuradio.app.data.ModSettings
@@ -37,6 +38,7 @@ class MusicService : MediaSessionService() {
     private val TAG = "MusicService"
     private var mediaSession: MediaSession? = null
     private lateinit var player: ExoPlayer
+    private var playerNotificationManager: PlayerNotificationManager? = null
     private val scope = CoroutineScope(Dispatchers.Main + Job())
     private var transitionJob: Job? = null
     private var previewJob: Job? = null
@@ -78,9 +80,65 @@ class MusicService : MediaSessionService() {
             mediaSession = MediaSession.Builder(this, player)
                 .setSessionActivity(pendingIntent)
                 .build()
+
+            setupPlayerNotificationManager()
         } catch (e: Exception) {
             Logger.error(TAG, "Failed to create MusicService", e)
         }
+    }
+
+    private fun setupPlayerNotificationManager() {
+        try {
+            playerNotificationManager = PlayerNotificationManager.Builder(this, NOTIFICATION_ID, CHANNEL_ID)
+                .setMediaDescriptionAdapter(
+                    object : PlayerNotificationManager.MediaDescriptionAdapter {
+                        override fun getCurrentContentTitle(player: Player): CharSequence =
+                            player.mediaMetadata.title ?: "Now Playing"
+
+                        override fun getCurrentContentText(player: Player): CharSequence? =
+                            player.mediaMetadata.artist ?: ""
+
+                        override fun getCurrentLargeIcon(
+                            player: Player,
+                            callback: PlayerNotificationManager.BitmapCallback
+                        ): android.graphics.Bitmap? {
+                            return player.mediaMetadata.artworkData?.let {
+                                BitmapFactory.decodeByteArray(it, 0, it.size)
+                            }
+                        }
+
+                        override fun getCurrentSubText(player: Player): CharSequence? = null
+                    }
+                )
+                .setSmallIconResourceId(android.R.drawable.ic_media_play)
+                .setNotificationListener(object : PlayerNotificationManager.NotificationListener {
+                    override fun onNotificationPosted(
+                        notificationId: Int,
+                        notification: android.app.Notification,
+                        ongoing: Boolean
+                    ) {
+                        if (ongoing && !isServiceRunning()) {
+                            startForeground(notificationId, notification)
+                        }
+                    }
+
+                    override fun onNotificationCancelled(notificationId: Int, dismissedByUser: Boolean) {
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                    }
+                })
+                .build()
+
+            playerNotificationManager?.setPlayer(player)
+        } catch (e: Exception) {
+            Logger.error(TAG, "Failed to setup PlayerNotificationManager", e)
+        }
+    }
+
+    private fun isServiceRunning(): Boolean {
+        val manager = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        @Suppress("DEPRECATION")
+        return manager.getRunningServices(Integer.MAX_VALUE)
+            .any { it.service.className == this.javaClass.name }
     }
 
     override fun onBind(intent: Intent?): IBinder {
@@ -305,6 +363,7 @@ class MusicService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        playerNotificationManager?.setPlayer(null)
         transitionJob?.cancel()
         previewJob?.cancel()
         modRampJob?.cancel()
@@ -319,5 +378,6 @@ class MusicService : MediaSessionService() {
 
     companion object {
         const val CHANNEL_ID = "osu_radio_playback"
+        const val NOTIFICATION_ID = 1
     }
 }
