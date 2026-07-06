@@ -3,6 +3,7 @@
 </p>
 
 # osu!radio
+[![Discord](https://discordapp.com/api/guilds/1523699874695086090/widget.png?style=shield)](https://discord.gg/hXtv87C8xq)
 Android music player that lets you play osu! beatmap songs
 
 ## Features
@@ -10,7 +11,7 @@ Android music player that lets you play osu! beatmap songs
 • Playback controls (skip, shuffle etc)\
 • Playlists (lets you make playlists, put songs inside them & play them)\
 • Automatic updater (prompts you to update to vx.x.x inside the app when a new version is released in the repository)\
-more features are coming soon, so stay tuned!
+and many more features!
 
 ## Setup
 ### Built-in Downloader (Recommended)
