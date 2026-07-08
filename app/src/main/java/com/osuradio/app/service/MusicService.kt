@@ -45,6 +45,7 @@ class MusicService : MediaSessionService() {
     private var modRampJob: Job? = null
     private var currentTransition: AudioTransition = AudioTransition.FADE_IN_OUT
     private val binder = LocalBinder()
+    private lateinit var sessionActivityPendingIntent: PendingIntent
 
     inner class LocalBinder : Binder() {
         fun getService(): MusicService = this@MusicService
@@ -70,7 +71,7 @@ class MusicService : MediaSessionService() {
             player.repeatMode = Player.REPEAT_MODE_OFF
 
             val activityIntent = Intent(this, MainActivity::class.java)
-            val pendingIntent = PendingIntent.getActivity(
+            sessionActivityPendingIntent = PendingIntent.getActivity(
                 this, 0, activityIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
@@ -78,7 +79,7 @@ class MusicService : MediaSessionService() {
             createNotificationChannel()
 
             mediaSession = MediaSession.Builder(this, player)
-                .setSessionActivity(pendingIntent)
+                .setSessionActivity(sessionActivityPendingIntent)
                 .build()
 
             setupPlayerNotificationManager()
@@ -108,6 +109,10 @@ class MusicService : MediaSessionService() {
                         }
 
                         override fun getCurrentSubText(player: Player): CharSequence? = null
+
+                        override fun createCurrentContentIntent(player: Player): PendingIntent? {
+                            return sessionActivityPendingIntent
+                        }
                     }
                 )
                 .setSmallIconResourceId(android.R.drawable.ic_media_play)
