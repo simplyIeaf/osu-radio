@@ -52,6 +52,27 @@ class MusicService : MediaSessionService() {
         fun getService(): MusicService = this@MusicService
     }
 
+    private inner class NotificationMediaDescriptionAdapter :
+        PlayerNotificationManager.MediaDescriptionAdapter {
+
+        override fun getCurrentContentTitle(player: Player): CharSequence =
+            player.mediaMetadata.title ?: "Now Playing"
+
+        override fun getCurrentContentText(player: Player): CharSequence? =
+            player.mediaMetadata.artist ?: ""
+
+        override fun getCurrentLargeIcon(
+            player: Player,
+            callback: PlayerNotificationManager.BitmapCallback
+        ): android.graphics.Bitmap? =
+            player.mediaMetadata.artworkData?.let {
+                BitmapFactory.decodeByteArray(it, 0, it.size)
+            }
+
+        override fun createCurrentContentIntent(player: Player): PendingIntent? =
+            sessionActivityPendingIntent
+    }
+
     override fun onCreate() {
         super.onCreate()
         try {
@@ -92,24 +113,7 @@ class MusicService : MediaSessionService() {
     private fun setupPlayerNotificationManager() {
         try {
             playerNotificationManager = PlayerNotificationManager.Builder(this, NOTIFICATION_ID, CHANNEL_ID)
-                .setMediaDescriptionAdapter(
-                    object : PlayerNotificationManager.MediaDescriptionAdapter {
-                        override fun getCurrentContentTitle(player: Player): CharSequence =
-                            player.mediaMetadata.title ?: "Now Playing"
-
-                        override fun getCurrentContentText(player: Player): CharSequence? =
-                            player.mediaMetadata.artist ?: ""
-
-                        override fun getCurrentLargeIcon(
-                            player: Player,
-                            callback: PlayerNotificationManager.BitmapCallback
-                        ): android.graphics.Bitmap? {
-                            return player.mediaMetadata.artworkData?.let {
-                                BitmapFactory.decodeByteArray(it, 0, it.size)
-                            }
-                        }
-                    }
-                )
+                .setMediaDescriptionAdapter(NotificationMediaDescriptionAdapter())
                 .setSmallIconResourceId(R.drawable.ic_radio)
                 .setNotificationListener(object : PlayerNotificationManager.NotificationListener {
                     override fun onNotificationPosted(
