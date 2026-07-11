@@ -14,12 +14,12 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.osuradio.app.BuildConfig
 import com.osuradio.app.data.AppSettings
 import com.osuradio.app.data.ModSettings
-import com.osuradio.app.data.NerinyanBeatmapSet
+import com.osuradio.app.data.OsuDirectBeatmapSet
 import com.osuradio.app.data.Playlist
 import com.osuradio.app.data.RepeatMode
 import com.osuradio.app.data.Song
 import com.osuradio.app.data.SongMod
-import com.osuradio.app.network.NerinyanApi
+import com.osuradio.app.network.OsuDirectApi
 import com.osuradio.app.service.MusicService
 import com.osuradio.app.utils.ConfigManager
 import com.osuradio.app.utils.DownloadManager
@@ -106,14 +106,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _downloadSearchQuery = MutableStateFlow("")
     val downloadSearchQuery: StateFlow<String> = _downloadSearchQuery.asStateFlow()
 
-    private val _downloadSortOption = MutableStateFlow(NerinyanApi.SortOption.PLAY_COUNT)
-    val downloadSortOption: StateFlow<NerinyanApi.SortOption> = _downloadSortOption.asStateFlow()
+    private val _downloadSortOption = MutableStateFlow(OsuDirectApi.SortOption.PLAY_COUNT)
+    val downloadSortOption: StateFlow<OsuDirectApi.SortOption> = _downloadSortOption.asStateFlow()
 
-    private val _downloadStatusOption = MutableStateFlow(NerinyanApi.StatusOption.RANKED)
-    val downloadStatusOption: StateFlow<NerinyanApi.StatusOption> = _downloadStatusOption.asStateFlow()
+    private val _downloadStatusOption = MutableStateFlow(OsuDirectApi.StatusOption.RANKED)
+    val downloadStatusOption: StateFlow<OsuDirectApi.StatusOption> = _downloadStatusOption.asStateFlow()
 
-    private val _downloadResults = MutableStateFlow<List<NerinyanBeatmapSet>>(emptyList())
-    val downloadResults: StateFlow<List<NerinyanBeatmapSet>> = _downloadResults.asStateFlow()
+    private val _downloadResults = MutableStateFlow<List<OsuDirectBeatmapSet>>(emptyList())
+    val downloadResults: StateFlow<List<OsuDirectBeatmapSet>> = _downloadResults.asStateFlow()
 
     private val _downloadLoading = MutableStateFlow(false)
     val downloadLoading: StateFlow<Boolean> = _downloadLoading.asStateFlow()
@@ -141,8 +141,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             val localBinder = binder as? MusicService.LocalBinder
-            musicService = localBinder?.getService()
+            val svc = localBinder?.getService()
+            musicService = svc
             serviceBound = true
+            // Wire up notification prev/next callbacks
+            svc?.onNextRequested = { skipToNext() }
+            svc?.onPrevRequested = { skipToPrev() }
             attachPlayerListener()
             startPositionUpdater()
         }
@@ -333,12 +337,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setDownloadSortOption(option: NerinyanApi.SortOption) {
+    fun setDownloadSortOption(option: OsuDirectApi.SortOption) {
         _downloadSortOption.value = option
         refreshDownloadSearch()
     }
 
-    fun setDownloadStatusOption(option: NerinyanApi.StatusOption) {
+    fun setDownloadStatusOption(option: OsuDirectApi.StatusOption) {
         _downloadStatusOption.value = option
         refreshDownloadSearch()
     }
@@ -348,7 +352,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         downloadHasMore = true
         viewModelScope.launch {
             _downloadLoading.value = true
-            val results = NerinyanApi.search(
+            val results = OsuDirectApi.search(
                 query = _downloadSearchQuery.value,
                 page = downloadPage,
                 sort = _downloadSortOption.value,
@@ -365,7 +369,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _downloadLoading.value = true
             downloadPage += 1
-            val results = NerinyanApi.search(
+            val results = OsuDirectApi.search(
                 query = _downloadSearchQuery.value,
                 page = downloadPage,
                 sort = _downloadSortOption.value,
@@ -380,7 +384,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun downloadBeatmapset(set: NerinyanBeatmapSet) {
+    fun downloadBeatmapset(set: OsuDirectBeatmapSet) {
         downloadManager.enqueue(set)
     }
 
@@ -406,10 +410,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val service = musicService ?: return
         service.setTransition(_settings.value.audioTransition)
         service.playAudio(song.audioPath, song.title, song.artist, song.imagePath)
-    }
-
-    fun previewSong(song: Song) {
-        musicService?.previewAudio(song.audioPath)
     }
 
     fun pauseResume() {
@@ -490,6 +490,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         else _songs.value.filter {
             it.title.lowercase().contains(q) || it.artist.lowercase().contains(q)
         }
+    }
+
+    fun isSongInPlaylist(playlistId: String, songId: String): Boolean {
+        return _playlists.value.find { it.id == playlistId }?.songIds?.contains(songId) == true
     }
 
     fun createPlaylist(name: String) {
