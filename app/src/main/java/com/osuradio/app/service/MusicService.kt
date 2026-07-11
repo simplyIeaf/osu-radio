@@ -21,6 +21,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.ui.PlayerNotificationManager
 import com.osuradio.app.MainActivity
+import com.osuradio.app.R
 import com.osuradio.app.data.AudioTransition
 import com.osuradio.app.data.ModSettings
 import com.osuradio.app.data.SongMod
@@ -107,15 +108,9 @@ class MusicService : MediaSessionService() {
                                 BitmapFactory.decodeByteArray(it, 0, it.size)
                             }
                         }
-
-                        override fun getCurrentSubText(player: Player): CharSequence? = null
-
-                        override fun createCurrentContentIntent(player: Player): PendingIntent? {
-                            return sessionActivityPendingIntent
-                        }
                     }
                 )
-                .setSmallIconResourceId(android.R.drawable.ic_media_play)
+                .setSmallIconResourceId(R.drawable.ic_radio)
                 .setNotificationListener(object : PlayerNotificationManager.NotificationListener {
                     override fun onNotificationPosted(
                         notificationId: Int,
