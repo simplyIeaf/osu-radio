@@ -14,12 +14,12 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.osuradio.app.BuildConfig
 import com.osuradio.app.data.AppSettings
 import com.osuradio.app.data.ModSettings
-import com.osuradio.app.data.OsuDirectBeatmapSet
+import com.osuradio.app.data.NerinyanBeatmapSet
 import com.osuradio.app.data.Playlist
 import com.osuradio.app.data.RepeatMode
 import com.osuradio.app.data.Song
 import com.osuradio.app.data.SongMod
-import com.osuradio.app.network.OsuDirectApi
+import com.osuradio.app.network.NerinyanApi
 import com.osuradio.app.service.MusicService
 import com.osuradio.app.utils.ConfigManager
 import com.osuradio.app.utils.DownloadManager
@@ -106,14 +106,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _downloadSearchQuery = MutableStateFlow("")
     val downloadSearchQuery: StateFlow<String> = _downloadSearchQuery.asStateFlow()
 
-    private val _downloadSortOption = MutableStateFlow(OsuDirectApi.SortOption.PLAY_COUNT)
-    val downloadSortOption: StateFlow<OsuDirectApi.SortOption> = _downloadSortOption.asStateFlow()
+    private val _downloadSortOption = MutableStateFlow(NerinyanApi.SortOption.PLAY_COUNT)
+    val downloadSortOption: StateFlow<NerinyanApi.SortOption> = _downloadSortOption.asStateFlow()
 
-    private val _downloadStatusOption = MutableStateFlow(OsuDirectApi.StatusOption.RANKED)
-    val downloadStatusOption: StateFlow<OsuDirectApi.StatusOption> = _downloadStatusOption.asStateFlow()
+    private val _downloadStatusOption = MutableStateFlow(NerinyanApi.StatusOption.RANKED)
+    val downloadStatusOption: StateFlow<NerinyanApi.StatusOption> = _downloadStatusOption.asStateFlow()
 
-    private val _downloadResults = MutableStateFlow<List<OsuDirectBeatmapSet>>(emptyList())
-    val downloadResults: StateFlow<List<OsuDirectBeatmapSet>> = _downloadResults.asStateFlow()
+    private val _downloadResults = MutableStateFlow<List<NerinyanBeatmapSet>>(emptyList())
+    val downloadResults: StateFlow<List<NerinyanBeatmapSet>> = _downloadResults.asStateFlow()
 
     private val _downloadLoading = MutableStateFlow(false)
     val downloadLoading: StateFlow<Boolean> = _downloadLoading.asStateFlow()
@@ -141,12 +141,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             val localBinder = binder as? MusicService.LocalBinder
-            val svc = localBinder?.getService()
-            musicService = svc
+            musicService = localBinder?.getService()
             serviceBound = true
-            // Wire up notification prev/next callbacks
-            svc?.onNextRequested = { skipToNext() }
-            svc?.onPrevRequested = { skipToPrev() }
             attachPlayerListener()
             startPositionUpdater()
         }
@@ -337,12 +333,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setDownloadSortOption(option: OsuDirectApi.SortOption) {
+    fun setDownloadSortOption(option: NerinyanApi.SortOption) {
         _downloadSortOption.value = option
         refreshDownloadSearch()
     }
 
-    fun setDownloadStatusOption(option: OsuDirectApi.StatusOption) {
+    fun setDownloadStatusOption(option: NerinyanApi.StatusOption) {
         _downloadStatusOption.value = option
         refreshDownloadSearch()
     }
@@ -352,226 +348,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         downloadHasMore = true
         viewModelScope.launch {
             _downloadLoading.value = true
-            val results = OsuDirectApi.search(
+            val results = NerinyanApi.search(
                 query = _downloadSearchQuery.value,
                 page = downloadPage,
                 sort = _downloadSortOption.value,
-                status = _downloadStatusOption.value
-            )
-            _downloadResults.value = results
-            downloadHasMore = results.isNotEmpty()
-            _downloadLoading.value = false
-        }
-    }
-
-    fun loadMoreDownloadResults() {
-        if (!downloadHasMore || _downloadLoading.value) return
-        viewModelScope.launch {
-            _downloadLoading.value = true
-            downloadPage += 1
-            val results = OsuDirectApi.search(
-                query = _downloadSearchQuery.value,
-                page = downloadPage,
-                sort = _downloadSortOption.value,
-                status = _downloadStatusOption.value
-            )
-            if (results.isEmpty()) {
-                downloadHasMore = false
-            } else {
-                _downloadResults.value = _downloadResults.value + results
-            }
-            _downloadLoading.value = false
-        }
-    }
-
-    fun downloadBeatmapset(set: OsuDirectBeatmapSet) {
-        downloadManager.enqueue(set)
-    }
-
-    private fun startPositionUpdater() {
-        positionUpdaterJob?.cancel()
-        positionUpdaterJob = viewModelScope.launch {
-            while (true) {
-                val service = musicService
-                if (service != null && service.getPlayer().isPlaying) {
-                    _currentPositionMs.value = service.getPlayer().currentPosition
-                    _isPlaying.value = true
-                } else if (service != null) {
-                    _isPlaying.value = service.getPlayer().isPlaying
-                }
-                kotlinx.coroutines.delay(500)
-            }
-        }
-    }
-
-    fun playSong(song: Song) {
-        _currentSong.value = song
-        _isPlaying.value = true
-        val service = musicService ?: return
-        service.setTransition(_settings.value.audioTransition)
-        service.playAudio(song.audioPath, song.title, song.artist, song.imagePath)
-    }
-
-    fun pauseResume() {
-        musicService?.pauseResume()
-        _isPlaying.value = musicService?.getPlayer()?.isPlaying ?: false
-    }
-
-    fun seekTo(positionMs: Long) {
-        musicService?.seekTo(positionMs)
-        _currentPositionMs.value = positionMs
-    }
-
-    fun skipToNext() {
-        val currentQueue = _queue.value
-        val current = _currentSong.value ?: return
-        val idx = currentQueue.indexOfFirst { it.id == current.id }
-        val nextSong = when {
-            _settings.value.repeat == RepeatMode.ONE -> current
-            _settings.value.shuffle -> currentQueue.random()
-            idx >= 0 && idx < currentQueue.size - 1 -> currentQueue[idx + 1]
-            _settings.value.repeat == RepeatMode.ALL -> currentQueue.firstOrNull()
-            else -> null
-        }
-        nextSong?.let { playSong(it) }
-    }
-
-    fun skipToPrev() {
-        val currentQueue = _queue.value
-        val current = _currentSong.value ?: return
-        val idx = currentQueue.indexOfFirst { it.id == current.id }
-        val prevSong = if (idx > 0) currentQueue[idx - 1] else {
-            if (_settings.value.repeat == RepeatMode.ALL) currentQueue.lastOrNull() else null
-        }
-        prevSong?.let { playSong(it) } ?: musicService?.seekTo(0)
-    }
-
-    private fun onSongEnded() {
-        when (_settings.value.repeat) {
-            RepeatMode.ONE -> _currentSong.value?.let { playSong(it) }
-            RepeatMode.ALL, RepeatMode.NONE -> skipToNext()
-        }
-    }
-
-    fun applyMod(mod: SongMod, customSpeed: Float = 1.0f) {
-        val currentPos = _currentPositionMs.value
-        val newModSettings = ModSettings(activeMod = mod, customSpeed = customSpeed)
-        _modSettings.value = newModSettings
-        musicService?.applyMod(newModSettings, currentPos)
-    }
-
-    fun updateSettings(settings: AppSettings) {
-        _settings.value = settings
-        ConfigManager.saveSettings(settings)
-        musicService?.setTransition(settings.audioTransition)
-    }
-
-    fun toggleShuffle() {
-        val newSettings = _settings.value.copy(shuffle = !_settings.value.shuffle)
-        updateSettings(newSettings)
-    }
-
-    fun toggleRepeat() {
-        val next = when (_settings.value.repeat) {
-            RepeatMode.NONE -> RepeatMode.ALL
-            RepeatMode.ALL -> RepeatMode.ONE
-            RepeatMode.ONE -> RepeatMode.NONE
-        }
-        updateSettings(_settings.value.copy(repeat = next))
-    }
-
-    fun setSearchQuery(query: String) {
-        _searchQuery.value = query
-    }
-
-    fun getFilteredSongs(): List<Song> {
-        val q = _searchQuery.value.lowercase()
-        return if (q.isBlank()) _songs.value
-        else _songs.value.filter {
-            it.title.lowercase().contains(q) || it.artist.lowercase().contains(q)
-        }
-    }
-
-    fun isSongInPlaylist(playlistId: String, songId: String): Boolean {
-        return _playlists.value.find { it.id == playlistId }?.songIds?.contains(songId) == true
-    }
-
-    fun createPlaylist(name: String) {
-        val playlist = Playlist(id = UUID.randomUUID().toString(), name = name)
-        ConfigManager.addPlaylist(playlist)
-        _playlists.value = ConfigManager.getPlaylists()
-    }
-
-    fun deletePlaylist(playlistId: String) {
-        ConfigManager.removePlaylist(playlistId)
-        _playlists.value = ConfigManager.getPlaylists()
-    }
-
-    fun addSongToPlaylist(playlistId: String, songId: String) {
-        val playlist = _playlists.value.find { it.id == playlistId } ?: return
-        if (!playlist.songIds.contains(songId)) {
-            playlist.songIds.add(songId)
-            ConfigManager.updatePlaylist(playlist)
-            _playlists.value = ConfigManager.getPlaylists()
-        }
-    }
-
-    fun removeSongFromPlaylist(playlistId: String, songId: String) {
-        val playlist = _playlists.value.find { it.id == playlistId } ?: return
-        playlist.songIds.remove(songId)
-        ConfigManager.updatePlaylist(playlist)
-        _playlists.value = ConfigManager.getPlaylists()
-    }
-
-    fun playPlaylist(playlist: Playlist, shuffle: Boolean = false) {
-        var playlistSongs = _songs.value.filter { playlist.songIds.contains(it.id) }
-        if (playlistSongs.isNotEmpty()) {
-            if (shuffle) playlistSongs = playlistSongs.shuffled()
-            _queue.value = playlistSongs
-            playSong(playlistSongs.first())
-        }
-    }
-
-    fun importOszFile(context: Context, uri: Uri) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val song = OszImporter.importOsz(context, uri)
-            if (song != null) {
-                withContext(Dispatchers.Main) {
-                    mergeSong(song)
-                }
-            }
-        }
-    }
-
-    fun importZipFile(context: Context, uri: Uri) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val imported = OszImporter.importFullZip(context, uri)
-            if (imported.isNotEmpty()) {
-                withContext(Dispatchers.Main) {
-                    imported.forEach { mergeSong(it) }
-                }
-            }
-        }
-    }
-
-    private fun mergeSong(song: Song) {
-        val current = _songs.value.toMutableList()
-        if (current.none { it.id == song.id }) {
-            current.add(song)
-            _songs.value = current.sortedBy { it.artist }
-            _queue.value = _songs.value
-        }
-    }
-
-    fun getSongsForPlaylist(playlist: Playlist): List<Song> {
-        return _songs.value.filter { playlist.songIds.contains(it.id) }
-    }
-
-    fun playPlaylistFrom(playlist: Playlist, song: Song) {
-        val playlistSongs = _songs.value.filter { playlist.songIds.contains(it.id) }
-        if (playlistSongs.isNotEmpty()) {
-            _queue.value = playlistSongs
-            playSong(song)
-        }
-    }
-}
+{
