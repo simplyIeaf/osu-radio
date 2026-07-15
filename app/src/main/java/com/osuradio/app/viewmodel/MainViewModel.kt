@@ -525,8 +525,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _settings.value = settings
         ConfigManager.saveSettings(settings)
         musicService?.setTransition(settings.audioTransition)
-        musicService?.updateShuffleState(settings.shuffle)
-        musicService?.updateLoopState(settings.repeat)
     }
 
     fun toggleShuffle() {
