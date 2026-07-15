@@ -12,17 +12,21 @@ import android.net.Uri
 import android.os.Binder
 import android.os.Bundle
 import android.os.IBinder
+import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.TrackSelectionParameters
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.LibraryResult
-import androidx.media3.session.MediaLibrarySession
 import androidx.media3.session.MediaLibraryService
+import androidx.media3.session.MediaLibraryService.LibraryParams
+import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.media3.session.MediaSession
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
@@ -154,7 +158,7 @@ class MusicService : MediaLibraryService() {
         override fun onGetLibraryRoot(
             session: MediaLibrarySession,
             browser: MediaSession.ControllerInfo,
-            params: MediaLibrarySession.LibraryParams?
+            params: LibraryParams?
         ): ListenableFuture<LibraryResult<MediaItem>> =
             Futures.immediateFuture(LibraryResult.ofItem(browserRoot, params))
 
@@ -164,7 +168,7 @@ class MusicService : MediaLibraryService() {
             parentId: String,
             page: Int,
             pageSize: Int,
-            params: MediaLibrarySession.LibraryParams?
+            params: LibraryParams?
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
             val items: List<MediaItem> = when (parentId) {
                 ROOT_ID  -> listOf(
@@ -218,6 +222,7 @@ class MusicService : MediaLibraryService() {
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
+    @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
         try {
@@ -238,7 +243,16 @@ class MusicService : MediaLibraryService() {
 
             player.repeatMode = Player.REPEAT_MODE_OFF
             // Hand audio decode off to DSP co-processor when idle → better battery life
-            player.experimentalSetOffloadSchedulingEnabled(true)
+            player.trackSelectionParameters = player.trackSelectionParameters
+                .buildUpon()
+                .setAudioOffloadPreferences(
+                    TrackSelectionParameters.AudioOffloadPreferences.Builder()
+                        .setAudioOffloadMode(
+                            TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED
+                        )
+                        .build()
+                )
+                .build()
             player.addListener(playerListener)
 
             val activityIntent = Intent(this, MainActivity::class.java)
