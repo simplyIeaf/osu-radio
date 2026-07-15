@@ -5,33 +5,25 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.graphics.BitmapFactory
 import android.os.Binder
 import android.os.Build
-import android.os.Bundle
 import android.os.IBinder
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
-import androidx.media3.session.SessionCommand
-import androidx.media3.session.SessionResult
 import androidx.media3.ui.PlayerNotificationManager
-import com.google.common.collect.ImmutableList
-import com.google.common.util.concurrent.Futures
-import com.google.common.util.concurrent.ListenableFuture
 import com.osuradio.app.MainActivity
 import com.osuradio.app.R
 import com.osuradio.app.data.AudioTransition
 import com.osuradio.app.data.ModSettings
-import com.osuradio.app.data.RepeatMode
 import com.osuradio.app.data.SongMod
 import com.osuradio.app.utils.Logger
 import kotlinx.coroutines.CoroutineScope
@@ -40,91 +32,43 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.io.ByteArrayOutputStream
 import java.io.File
 
 class MusicService : MediaSessionService() {
     private val TAG = "MusicService"
     private var mediaSession: MediaSession? = null
     private lateinit var player: ExoPlayer
+
+    /** Wrapped player that redirects prev/next to ViewModel callbacks instead of seeking. */
+    private lateinit var wrappedPlayer: ForwardingPlayer
+
     private var playerNotificationManager: PlayerNotificationManager? = null
     private val scope = CoroutineScope(Dispatchers.Main + Job())
     private var transitionJob: Job? = null
-    private var previewJob: Job? = null
     private var modRampJob: Job? = null
     private var currentTransition: AudioTransition = AudioTransition.FADE_IN_OUT
     private val binder = LocalBinder()
     private lateinit var sessionActivityPendingIntent: PendingIntent
 
-    // Current shuffle and loop state (mirrors ViewModel settings)
-    private var isShuffleOn = false
-    private var currentRepeatMode = RepeatMode.NONE
+    /**
+     * Called when the user taps "next" in the media notification.
+     * Set by ViewModel to call skipToNext().
+     */
+    var onNextRequested: (() -> Unit)? = null
 
-    // Callbacks invoked when user toggles shuffle/loop from the notification
-    var onShuffleToggled: (() -> Unit)? = null
-    var onLoopToggled: (() -> Unit)? = null
+    /**
+     * Called when the user taps "previous" in the media notification.
+     * Set by ViewModel to call skipToPrev().
+     */
+    var onPrevRequested: (() -> Unit)? = null
 
     companion object {
         const val CHANNEL_ID = "osu_radio_playback"
         const val NOTIFICATION_ID = 1
-        const val ACTION_TOGGLE_SHUFFLE = "com.osuradio.app.TOGGLE_SHUFFLE"
-        const val ACTION_TOGGLE_LOOP = "com.osuradio.app.TOGGLE_LOOP"
     }
 
     inner class LocalBinder : Binder() {
         fun getService(): MusicService = this@MusicService
-    }
-
-    private inner class NotificationMediaDescriptionAdapter :
-        PlayerNotificationManager.MediaDescriptionAdapter {
-
-        override fun getCurrentContentTitle(player: Player): CharSequence =
-            player.mediaMetadata.title ?: "Now Playing"
-
-        override fun getCurrentContentText(player: Player): CharSequence? =
-            player.mediaMetadata.artist ?: ""
-
-        override fun getCurrentLargeIcon(
-            player: Player,
-            callback: PlayerNotificationManager.BitmapCallback
-        ): android.graphics.Bitmap? =
-            player.mediaMetadata.artworkData?.let {
-                BitmapFactory.decodeByteArray(it, 0, it.size)
-            }
-
-        override fun createCurrentContentIntent(player: Player): PendingIntent? =
-            sessionActivityPendingIntent
-    }
-
-    private inner class SessionCallback : MediaSession.Callback {
-        override fun onConnect(
-            session: MediaSession,
-            controller: MediaSession.ControllerInfo
-        ): MediaSession.ConnectionResult {
-            val shuffleCommand = SessionCommand(ACTION_TOGGLE_SHUFFLE, Bundle.EMPTY)
-            val loopCommand = SessionCommand(ACTION_TOGGLE_LOOP, Bundle.EMPTY)
-            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
-                .setAvailableSessionCommands(
-                    MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
-                        .add(shuffleCommand)
-                        .add(loopCommand)
-                        .build()
-                )
-                .build()
-        }
-
-        override fun onCustomCommand(
-            session: MediaSession,
-            controller: MediaSession.ControllerInfo,
-            customCommand: SessionCommand,
-            args: Bundle
-        ): ListenableFuture<SessionResult> {
-            when (customCommand.customAction) {
-                ACTION_TOGGLE_SHUFFLE -> onShuffleToggled?.invoke()
-                ACTION_TOGGLE_LOOP -> onLoopToggled?.invoke()
-            }
-            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
-        }
     }
 
     override fun onCreate() {
@@ -146,6 +90,23 @@ class MusicService : MediaSessionService() {
 
             player.repeatMode = Player.REPEAT_MODE_OFF
 
+            // Wrap the player so prev/next route to ViewModel callbacks
+            // instead of trying to seek within a single-item queue.
+            wrappedPlayer = object : ForwardingPlayer(player) {
+                override fun seekToPreviousMediaItem() { onPrevRequested?.invoke() }
+                override fun seekToNextMediaItem()     { onNextRequested?.invoke() }
+                override fun seekToPrevious()          { onPrevRequested?.invoke() }
+                override fun seekToNext()              { onNextRequested?.invoke() }
+
+                // Keep the commands available so the notification buttons appear
+                override fun getAvailableCommands(): Player.Commands {
+                    return super.getAvailableCommands().buildUpon()
+                        .add(COMMAND_SEEK_TO_PREVIOUS)
+                        .add(COMMAND_SEEK_TO_NEXT)
+                        .build()
+                }
+            }
+
             val activityIntent = Intent(this, MainActivity::class.java)
             sessionActivityPendingIntent = PendingIntent.getActivity(
                 this, 0, activityIntent,
@@ -154,10 +115,8 @@ class MusicService : MediaSessionService() {
 
             createNotificationChannel()
 
-            mediaSession = MediaSession.Builder(this, player)
-                .setCallback(SessionCallback())
+            mediaSession = MediaSession.Builder(this, wrappedPlayer)
                 .setSessionActivity(sessionActivityPendingIntent)
-                .setMediaButtonPreferences(buildMediaButtonPreferences())
                 .build()
 
             setupPlayerNotificationManager()
@@ -166,62 +125,26 @@ class MusicService : MediaSessionService() {
         }
     }
 
-    /**
-     * Build the custom shuffle + loop command buttons shown in system media controls.
-     * On Android 13+ these appear as additional slots; on older Android they appear as
-     * notification action buttons via PlayerNotificationManager / MediaStyle.
-     */
-    private fun buildMediaButtonPreferences(): ImmutableList<CommandButton> {
-        val shuffleIcon = if (isShuffleOn)
-            CommandButton.ICON_SHUFFLE_ON
-        else
-            CommandButton.ICON_SHUFFLE_OFF
-
-        val loopIcon = when (currentRepeatMode) {
-            RepeatMode.ONE -> CommandButton.ICON_REPEAT_ONE
-            RepeatMode.ALL -> CommandButton.ICON_REPEAT_ALL
-            RepeatMode.NONE -> CommandButton.ICON_REPEAT_OFF
-        }
-
-        val shuffleButton = CommandButton.Builder(shuffleIcon)
-            .setDisplayName(if (isShuffleOn) "Shuffle on" else "Shuffle off")
-            .setSessionCommand(SessionCommand(ACTION_TOGGLE_SHUFFLE, Bundle.EMPTY))
-            .build()
-
-        val loopButton = CommandButton.Builder(loopIcon)
-            .setDisplayName(
-                when (currentRepeatMode) {
-                    RepeatMode.ONE -> "Repeat one"
-                    RepeatMode.ALL -> "Repeat all"
-                    RepeatMode.NONE -> "Repeat off"
-                }
-            )
-            .setSessionCommand(SessionCommand(ACTION_TOGGLE_LOOP, Bundle.EMPTY))
-            .build()
-
-        return ImmutableList.of(shuffleButton, loopButton)
-    }
-
-    /** Called from ViewModel when shuffle setting changes. */
-    fun updateShuffleState(shuffle: Boolean) {
-        isShuffleOn = shuffle
-        refreshMediaButtonPreferences()
-    }
-
-    /** Called from ViewModel when repeat/loop setting changes. */
-    fun updateLoopState(repeat: RepeatMode) {
-        currentRepeatMode = repeat
-        refreshMediaButtonPreferences()
-    }
-
-    private fun refreshMediaButtonPreferences() {
-        mediaSession?.setMediaButtonPreferences(buildMediaButtonPreferences())
-    }
-
     private fun setupPlayerNotificationManager() {
         try {
-            playerNotificationManager = PlayerNotificationManager.Builder(this, NOTIFICATION_ID, CHANNEL_ID)
-                .setMediaDescriptionAdapter(NotificationMediaDescriptionAdapter())
+            playerNotificationManager = PlayerNotificationManager
+                .Builder(this, NOTIFICATION_ID, CHANNEL_ID)
+                .setMediaDescriptionAdapter(object : PlayerNotificationManager.MediaDescriptionAdapter {
+                    override fun getCurrentContentTitle(player: Player): CharSequence =
+                        player.mediaMetadata.title ?: "Now Playing"
+
+                    override fun getCurrentContentText(player: Player): CharSequence? =
+                        player.mediaMetadata.artist ?: ""
+
+                    // No cover art in the notification
+                    override fun getCurrentLargeIcon(
+                        player: Player,
+                        callback: PlayerNotificationManager.BitmapCallback
+                    ): android.graphics.Bitmap? = null
+
+                    override fun createCurrentContentIntent(player: Player): PendingIntent? =
+                        sessionActivityPendingIntent
+                })
                 .setSmallIconResourceId(R.drawable.ic_radio)
                 .setNotificationListener(object : PlayerNotificationManager.NotificationListener {
                     override fun onNotificationPosted(
@@ -229,28 +152,19 @@ class MusicService : MediaSessionService() {
                         notification: android.app.Notification,
                         ongoing: Boolean
                     ) {
-                        if (ongoing && !isServiceRunning()) {
-                            startForeground(notificationId, notification)
-                        }
+                        if (ongoing) startForeground(notificationId, notification)
                     }
-
                     override fun onNotificationCancelled(notificationId: Int, dismissedByUser: Boolean) {
                         stopForeground(STOP_FOREGROUND_REMOVE)
                     }
                 })
                 .build()
 
-            playerNotificationManager?.setPlayer(player)
+            // Use wrappedPlayer so the notification prev/next buttons fire our callbacks
+            playerNotificationManager?.setPlayer(wrappedPlayer)
         } catch (e: Exception) {
             Logger.error(TAG, "Failed to setup PlayerNotificationManager", e)
         }
-    }
-
-    private fun isServiceRunning(): Boolean {
-        val manager = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-        @Suppress("DEPRECATION")
-        return manager.getRunningServices(Integer.MAX_VALUE)
-            .any { it.service.className == this.javaClass.name }
     }
 
     override fun onBind(intent: Intent?): IBinder {
@@ -260,6 +174,7 @@ class MusicService : MediaSessionService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
+    /** Returns the raw ExoPlayer for attaching listeners in the ViewModel. */
     fun getPlayer(): ExoPlayer = player
 
     fun playAudio(
@@ -270,26 +185,10 @@ class MusicService : MediaSessionService() {
         startMs: Long = 0L
     ) {
         try {
-            val artBytes: ByteArray? = imagePath?.let {
-                try {
-                    val bmp = BitmapFactory.decodeFile(it) ?: return@let null
-                    try {
-                        val out = ByteArrayOutputStream()
-                        bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, out)
-                        out.toByteArray()
-                    } finally {
-                        bmp.recycle()
-                    }
-                } catch (e: Exception) { null }
-            }
-
+            // Store image path but do NOT embed artwork bytes — keep notification art-free
             val metadata = MediaMetadata.Builder()
                 .setTitle(title.ifEmpty { File(path).nameWithoutExtension })
                 .setArtist(artist)
-                .setArtworkData(
-                    artBytes,
-                    if (artBytes != null) MediaMetadata.PICTURE_TYPE_FRONT_COVER else null
-                )
                 .build()
 
             val mediaItem = MediaItem.Builder()
@@ -324,7 +223,7 @@ class MusicService : MediaSessionService() {
             modRampJob?.cancel()
             val wasPlaying = player.isPlaying
             when (modSettings.activeMod) {
-                SongMod.WIND_UP -> startModRamp(startSpeed = 1.0f, endSpeed = 1.8f, durationMs = 45_000L)
+                SongMod.WIND_UP   -> startModRamp(startSpeed = 1.0f, endSpeed = 1.8f, durationMs = 45_000L)
                 SongMod.WIND_DOWN -> startModRamp(startSpeed = 1.0f, endSpeed = 0.6f, durationMs = 45_000L)
                 else -> {
                     val (speed, pitch) = resolveModParams(modSettings)
@@ -354,15 +253,15 @@ class MusicService : MediaSessionService() {
 
     private fun resolveModParams(modSettings: ModSettings): Pair<Float, Float> {
         return when (modSettings.activeMod) {
-            SongMod.NONE -> Pair(1.0f, 1.0f)
-            SongMod.DAYCORE -> Pair(0.75f, 0.75f)
-            SongMod.NIGHTCORE -> Pair(1.5f, 1.5f)
-            SongMod.DOUBLE_TIME -> Pair(1.5f, 1.0f)
-            SongMod.HALF_TIME -> Pair(0.75f, 1.0f)
-            SongMod.WIND_UP -> Pair(1.3f, 1.1f)
-            SongMod.WIND_DOWN -> Pair(0.8f, 0.9f)
-            SongMod.BASS_BOOST -> Pair(1.0f, 0.85f)
-            SongMod.VAPORWAVE -> Pair(0.7f, 0.7f)
+            SongMod.NONE         -> Pair(1.0f, 1.0f)
+            SongMod.DAYCORE      -> Pair(0.75f, 0.75f)
+            SongMod.NIGHTCORE    -> Pair(1.5f, 1.5f)
+            SongMod.DOUBLE_TIME  -> Pair(1.5f, 1.0f)
+            SongMod.HALF_TIME    -> Pair(0.75f, 1.0f)
+            SongMod.WIND_UP      -> Pair(1.3f, 1.1f)
+            SongMod.WIND_DOWN    -> Pair(0.8f, 0.9f)
+            SongMod.BASS_BOOST   -> Pair(1.0f, 0.85f)
+            SongMod.VAPORWAVE    -> Pair(0.7f, 0.7f)
             SongMod.CUSTOM_SPEED -> Pair(modSettings.customSpeed, modSettings.customSpeed)
         }
     }
@@ -414,26 +313,6 @@ class MusicService : MediaSessionService() {
         }
     }
 
-    fun skipToNext(onNext: () -> Unit) {
-        stopWithTransition()
-        scope.launch {
-            delay(600)
-            onNext()
-        }
-    }
-
-    fun skipToPrev(onPrev: () -> Unit) {
-        if (player.currentPosition > 3000) {
-            player.seekTo(0)
-        } else {
-            stopWithTransition()
-            scope.launch {
-                delay(600)
-                onPrev()
-            }
-        }
-    }
-
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -460,7 +339,6 @@ class MusicService : MediaSessionService() {
     override fun onDestroy() {
         playerNotificationManager?.setPlayer(null)
         transitionJob?.cancel()
-        previewJob?.cancel()
         modRampJob?.cancel()
         scope.cancel()
         mediaSession?.run {
