@@ -8,6 +8,7 @@ import android.content.Intent
 import android.graphics.BitmapFactory
 import android.os.Binder
 import android.os.Build
+import android.os.Bundle
 import android.os.IBinder
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -17,13 +18,20 @@ import androidx.media3.common.Player
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
 import androidx.media3.ui.PlayerNotificationManager
+import com.google.common.collect.ImmutableList
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.ListenableFuture
 import com.osuradio.app.MainActivity
 import com.osuradio.app.R
 import com.osuradio.app.data.AudioTransition
 import com.osuradio.app.data.ModSettings
+import com.osuradio.app.data.RepeatMode
 import com.osuradio.app.data.SongMod
 import com.osuradio.app.utils.Logger
 import kotlinx.coroutines.CoroutineScope
@@ -48,6 +56,21 @@ class MusicService : MediaSessionService() {
     private val binder = LocalBinder()
     private lateinit var sessionActivityPendingIntent: PendingIntent
 
+    // Current shuffle and loop state (mirrors ViewModel settings)
+    private var isShuffleOn = false
+    private var currentRepeatMode = RepeatMode.NONE
+
+    // Callbacks invoked when user toggles shuffle/loop from the notification
+    var onShuffleToggled: (() -> Unit)? = null
+    var onLoopToggled: (() -> Unit)? = null
+
+    companion object {
+        const val CHANNEL_ID = "osu_radio_playback"
+        const val NOTIFICATION_ID = 1
+        const val ACTION_TOGGLE_SHUFFLE = "com.osuradio.app.TOGGLE_SHUFFLE"
+        const val ACTION_TOGGLE_LOOP = "com.osuradio.app.TOGGLE_LOOP"
+    }
+
     inner class LocalBinder : Binder() {
         fun getService(): MusicService = this@MusicService
     }
@@ -71,6 +94,37 @@ class MusicService : MediaSessionService() {
 
         override fun createCurrentContentIntent(player: Player): PendingIntent? =
             sessionActivityPendingIntent
+    }
+
+    private inner class SessionCallback : MediaSession.Callback {
+        override fun onConnect(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo
+        ): MediaSession.ConnectionResult {
+            val shuffleCommand = SessionCommand(ACTION_TOGGLE_SHUFFLE, Bundle.EMPTY)
+            val loopCommand = SessionCommand(ACTION_TOGGLE_LOOP, Bundle.EMPTY)
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                .setAvailableSessionCommands(
+                    MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+                        .add(shuffleCommand)
+                        .add(loopCommand)
+                        .build()
+                )
+                .build()
+        }
+
+        override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand,
+            args: Bundle
+        ): ListenableFuture<SessionResult> {
+            when (customCommand.customAction) {
+                ACTION_TOGGLE_SHUFFLE -> onShuffleToggled?.invoke()
+                ACTION_TOGGLE_LOOP -> onLoopToggled?.invoke()
+            }
+            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+        }
     }
 
     override fun onCreate() {
@@ -101,13 +155,67 @@ class MusicService : MediaSessionService() {
             createNotificationChannel()
 
             mediaSession = MediaSession.Builder(this, player)
+                .setCallback(SessionCallback())
                 .setSessionActivity(sessionActivityPendingIntent)
+                .setMediaButtonPreferences(buildMediaButtonPreferences())
                 .build()
 
             setupPlayerNotificationManager()
         } catch (e: Exception) {
             Logger.error(TAG, "Failed to create MusicService", e)
         }
+    }
+
+    /**
+     * Build the custom shuffle + loop command buttons shown in system media controls.
+     * On Android 13+ these appear as additional slots; on older Android they appear as
+     * notification action buttons via PlayerNotificationManager / MediaStyle.
+     */
+    private fun buildMediaButtonPreferences(): ImmutableList<CommandButton> {
+        val shuffleIcon = if (isShuffleOn)
+            CommandButton.ICON_SHUFFLE
+        else
+            CommandButton.ICON_SHUFFLE_OFF
+
+        val loopIcon = when (currentRepeatMode) {
+            RepeatMode.ONE -> CommandButton.ICON_REPEAT_ONE
+            RepeatMode.ALL -> CommandButton.ICON_REPEAT_ALL
+            RepeatMode.NONE -> CommandButton.ICON_REPEAT_OFF
+        }
+
+        val shuffleButton = CommandButton.Builder(shuffleIcon)
+            .setDisplayName(if (isShuffleOn) "Shuffle on" else "Shuffle off")
+            .setSessionCommand(SessionCommand(ACTION_TOGGLE_SHUFFLE, Bundle.EMPTY))
+            .build()
+
+        val loopButton = CommandButton.Builder(loopIcon)
+            .setDisplayName(
+                when (currentRepeatMode) {
+                    RepeatMode.ONE -> "Repeat one"
+                    RepeatMode.ALL -> "Repeat all"
+                    RepeatMode.NONE -> "Repeat off"
+                }
+            )
+            .setSessionCommand(SessionCommand(ACTION_TOGGLE_LOOP, Bundle.EMPTY))
+            .build()
+
+        return ImmutableList.of(shuffleButton, loopButton)
+    }
+
+    /** Called from ViewModel when shuffle setting changes. */
+    fun updateShuffleState(shuffle: Boolean) {
+        isShuffleOn = shuffle
+        refreshMediaButtonPreferences()
+    }
+
+    /** Called from ViewModel when repeat/loop setting changes. */
+    fun updateLoopState(repeat: RepeatMode) {
+        currentRepeatMode = repeat
+        refreshMediaButtonPreferences()
+    }
+
+    private fun refreshMediaButtonPreferences() {
+        mediaSession?.setMediaButtonPreferences(buildMediaButtonPreferences())
     }
 
     private fun setupPlayerNotificationManager() {
@@ -196,23 +304,6 @@ class MusicService : MediaSessionService() {
             player.play()
         } catch (e: Exception) {
             Logger.error(TAG, "Failed to play audio: $path", e)
-        }
-    }
-
-    fun previewAudio(path: String) {
-        try {
-            previewJob?.cancel()
-            val mediaItem = MediaItem.fromUri(android.net.Uri.fromFile(File(path)))
-            player.setMediaItem(mediaItem)
-            player.prepare()
-            player.seekTo(10_000L)
-            player.play()
-            previewJob = scope.launch {
-                delay(10_000L)
-                stopWithTransition()
-            }
-        } catch (e: Exception) {
-            Logger.error(TAG, "Failed to preview audio: $path", e)
         }
     }
 
@@ -378,10 +469,5 @@ class MusicService : MediaSessionService() {
             mediaSession = null
         }
         super.onDestroy()
-    }
-
-    companion object {
-        const val CHANNEL_ID = "osu_radio_playback"
-        const val NOTIFICATION_ID = 1
     }
 }
