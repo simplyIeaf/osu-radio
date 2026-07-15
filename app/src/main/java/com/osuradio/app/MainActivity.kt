@@ -13,8 +13,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -251,117 +251,127 @@ fun MainApp(
         return
     }
 
-    AnimatedVisibility(
-        visible = showPlayer && currentSong.value != null,
-        enter = when (animationStyle) {
-            AnimationStyle.SLIDE -> slideInVertically(initialOffsetY = { it }, animationSpec = tween(350))
-            AnimationStyle.FADE -> fadeIn(animationSpec = tween(350))
-            AnimationStyle.SCALE -> fadeIn(animationSpec = tween(350))
-            AnimationStyle.NONE -> fadeIn(animationSpec = tween(0))
-        },
-        exit = when (animationStyle) {
-            AnimationStyle.SLIDE -> slideOutVertically(targetOffsetY = { it }, animationSpec = tween(350))
-            AnimationStyle.FADE -> fadeOut(animationSpec = tween(350))
-            AnimationStyle.SCALE -> fadeOut(animationSpec = tween(350))
-            AnimationStyle.NONE -> fadeOut(animationSpec = tween(0))
-        }
-    ) {
-        PlayerScreen(
-            viewModel = viewModel,
-            onBack = { showPlayer = false }
-        )
-    }
-
-    if (!showPlayer) {
-        Scaffold(
-            snackbarHost = { SnackbarHost(snackbarHostState) },
-            bottomBar = {
-                Column {
-                    AnimatedVisibility(visible = currentSong.value != null) {
-                        MiniPlayer(
-                            song = currentSong.value!!,
-                            isPlaying = isPlaying.value,
-                            currentPositionMs = currentPositionMs.value,
-                            onPlayPause = { viewModel.pauseResume() },
-                            onNext = { viewModel.skipToNext() },
-                            onClick = { showPlayer = true }
-                        )
-                    }
-                    NavigationBar(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 0.dp
-                    ) {
-                        tabs.forEachIndexed { index, tab ->
-                            NavigationBarItem(
-                                selected = selectedTab == index,
-                                onClick = { selectedTab = index },
-                                icon = { Icon(tab.icon, contentDescription = tab.label) },
-                                label = { Text(tab.label, style = MaterialTheme.typography.labelSmall) },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                                    indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            )
-                        }
+    // Use AnimatedContent for the player/main-screen transition so both screens participate
+    // in the animation and there's no z-fighting or instant Scaffold appearance.
+    val showPlayerFull = showPlayer && currentSong.value != null
+    AnimatedContent(
+        targetState = showPlayerFull,
+        transitionSpec = {
+            when (animationStyle) {
+                AnimationStyle.SLIDE -> {
+                    if (targetState) {
+                        // Opening player: slide up
+                        slideInVertically(initialOffsetY = { it }, animationSpec = tween(350)) togetherWith
+                                fadeOut(animationSpec = tween(200))
+                    } else {
+                        // Closing player: slide down
+                        fadeIn(animationSpec = tween(200)) togetherWith
+                                slideOutVertically(targetOffsetY = { it }, animationSpec = tween(350))
                     }
                 }
-            },
-            containerColor = MaterialTheme.colorScheme.background
-        ) { innerPadding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            ) {
-                AnimatedContent(
-                    targetState = selectedTab,
-                    transitionSpec = {
-                        when (animationStyle) {
-                            AnimationStyle.SLIDE -> {
-                                if (targetState > initialState) {
-                                    slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300)) togetherWith
-                                            slideOutHorizontally(targetOffsetX = { -it }, animationSpec = tween(300))
+                AnimationStyle.FADE -> fadeIn(tween(350)) togetherWith fadeOut(tween(350))
+                AnimationStyle.SCALE -> fadeIn(tween(350)) togetherWith fadeOut(tween(350))
+                AnimationStyle.NONE -> fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+            }
+        },
+        label = "player_main_content"
+    ) { isPlayerVisible ->
+        if (isPlayerVisible) {
+            PlayerScreen(
+                viewModel = viewModel,
+                onBack = { showPlayer = false }
+            )
+        } else {
+            Scaffold(
+                snackbarHost = { SnackbarHost(snackbarHostState) },
+                bottomBar = {
+                    Column {
+                        AnimatedVisibility(visible = currentSong.value != null) {
+                            MiniPlayer(
+                                song = currentSong.value!!,
+                                isPlaying = isPlaying.value,
+                                currentPositionMs = currentPositionMs.value,
+                                onPlayPause = { viewModel.pauseResume() },
+                                onNext = { viewModel.skipToNext() },
+                                onClick = { showPlayer = true }
+                            )
+                        }
+                        NavigationBar(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            tonalElevation = 0.dp
+                        ) {
+                            tabs.forEachIndexed { index, tab ->
+                                NavigationBarItem(
+                                    selected = selectedTab == index,
+                                    onClick = { selectedTab = index },
+                                    icon = { Icon(tab.icon, contentDescription = tab.label) },
+                                    label = { Text(tab.label, style = MaterialTheme.typography.labelSmall) },
+                                    colors = NavigationBarItemDefaults.colors(
+                                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                                        indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                )
+                            }
+                        }
+                    }
+                },
+                containerColor = MaterialTheme.colorScheme.background
+            ) { innerPadding ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                ) {
+                    AnimatedContent(
+                        targetState = selectedTab,
+                        transitionSpec = {
+                            when (animationStyle) {
+                                AnimationStyle.SLIDE -> {
+                                    if (targetState > initialState) {
+                                        slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300)) togetherWith
+                                                slideOutHorizontally(targetOffsetX = { -it }, animationSpec = tween(300))
+                                    } else {
+                                        slideInHorizontally(initialOffsetX = { -it }, animationSpec = tween(300)) togetherWith
+                                                slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(300))
+                                    }
+                                }
+                                AnimationStyle.FADE -> fadeIn(tween(250)) togetherWith fadeOut(tween(250))
+                                AnimationStyle.SCALE -> fadeIn(tween(250)) togetherWith fadeOut(tween(250))
+                                AnimationStyle.NONE -> fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                            }
+                        },
+                        label = "tab_content"
+                    ) { tab ->
+                        when (tab) {
+                            0 -> SongsScreen(
+                                viewModel = viewModel,
+                                onSongClick = { song ->
+                                    viewModel.playSong(song)
+                                    showPlayer = true
+                                }
+                            )
+                            1 -> {
+                                val playlist = selectedPlaylist
+                                if (playlist != null) {
+                                    PlaylistDetailScreen(
+                                        viewModel = viewModel,
+                                        playlist = playlist,
+                                        onBack = { selectedPlaylist = null },
+                                        onSongClick = { showPlayer = true }
+                                    )
                                 } else {
-                                    slideInHorizontally(initialOffsetX = { -it }, animationSpec = tween(300)) togetherWith
-                                            slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(300))
+                                    PlaylistsScreen(
+                                        viewModel = viewModel,
+                                        onOpenPlaylist = { selectedPlaylist = it }
+                                    )
                                 }
                             }
-                            AnimationStyle.FADE -> fadeIn(tween(250)) togetherWith fadeOut(tween(250))
-                            AnimationStyle.SCALE -> fadeIn(tween(250)) togetherWith fadeOut(tween(250))
-                            AnimationStyle.NONE -> fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                            2 -> DownloadScreen(viewModel = viewModel)
+                            3 -> SettingsScreen(viewModel = viewModel)
                         }
-                    },
-                    label = "tab_content"
-                ) { tab ->
-                    when (tab) {
-                        0 -> SongsScreen(
-                            viewModel = viewModel,
-                            onSongClick = { song ->
-                                viewModel.playSong(song)
-                                showPlayer = true
-                            }
-                        )
-                        1 -> {
-                            val playlist = selectedPlaylist
-                            if (playlist != null) {
-                                PlaylistDetailScreen(
-                                    viewModel = viewModel,
-                                    playlist = playlist,
-                                    onBack = { selectedPlaylist = null },
-                                    onSongClick = { showPlayer = true }
-                                )
-                            } else {
-                                PlaylistsScreen(
-                                    viewModel = viewModel,
-                                    onOpenPlaylist = { selectedPlaylist = it }
-                                )
-                            }
-                        }
-                        2 -> DownloadScreen(viewModel = viewModel)
-                        3 -> SettingsScreen(viewModel = viewModel)
                     }
                 }
             }
