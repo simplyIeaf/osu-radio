@@ -105,12 +105,12 @@ fun SettingsScreen(viewModel: MainViewModel) {
             }
         }
 
-        // ── Equalizer ─────────────────────────────────────────────────────────
+        // ── Audio ────────────────────────────────────────────────────────────
         item {
-            SettingsCard(title = "Equalizer") {
-                // Enable toggle
+            SettingsCard(title = "Audio") {
+                // Equalizer
                 SettingsToggle(
-                    title    = "Enable Equalizer",
+                    title    = "Equalizer",
                     subtitle = "Apply per-band gain to audio output",
                     checked  = eq.enabled,
                     onChange = { viewModel.updateSettings(settings.value.copy(equalizerSettings = eq.copy(enabled = it))) }
@@ -163,12 +163,11 @@ fun SettingsScreen(viewModel: MainViewModel) {
                         }
                     }
                 }
-            }
-        }
 
-        // ── Audio Enhancement ─────────────────────────────────────────────────
-        item {
-            SettingsCard(title = "Audio") {
+                Spacer(modifier = Modifier.height(4.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+
+                // Loudness Normalization
                 SettingsToggle(
                     title    = "Loudness Normalization",
                     subtitle = "Boosts quiet tracks to a consistent perceived volume",
