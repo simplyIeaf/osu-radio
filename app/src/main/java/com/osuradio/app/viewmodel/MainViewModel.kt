@@ -147,12 +147,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val localBinder = binder as? MusicService.LocalBinder
             musicService = localBinder?.getService()
             serviceBound = true
-            // Wire up shuffle/loop toggle callbacks from notification
-            musicService?.onShuffleToggled = { toggleShuffle() }
-            musicService?.onLoopToggled = { toggleRepeat() }
-            // Sync current shuffle/loop state to service
-            musicService?.updateShuffleState(_settings.value.shuffle)
-            musicService?.updateLoopState(_settings.value.repeat)
+            // Wire notification prev/next buttons to proper song skipping
+            musicService?.onNextRequested = { skipToNext() }
+            musicService?.onPrevRequested = { skipToPrev() }
             attachPlayerListener()
             startPositionUpdater()
         }
