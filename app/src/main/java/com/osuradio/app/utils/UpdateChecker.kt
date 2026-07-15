@@ -21,16 +21,17 @@ object UpdateChecker {
     )
 
     suspend fun fetchLatestRelease(): ReleaseInfo? = withContext(Dispatchers.IO) {
+        var conn: HttpURLConnection? = null
         try {
             val url = URL(RELEASES_URL)
-            val conn = url.openConnection() as HttpURLConnection
+            conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "GET"
             conn.setRequestProperty("Accept", "application/vnd.github+json")
             conn.connectTimeout = 8000
             conn.readTimeout = 8000
             val code = conn.responseCode
             if (code != 200) return@withContext null
-            val body = conn.inputStream.bufferedReader().readText()
+            val body = conn.inputStream.bufferedReader().use { it.readText() }
             val json = JSONObject(body)
             val tag = json.getString("tag_name")
             val assets = json.getJSONArray("assets")
@@ -47,6 +48,8 @@ object UpdateChecker {
         } catch (e: Exception) {
             Logger.error("UpdateChecker", "Failed to fetch release", e)
             null
+        } finally {
+            conn?.disconnect()
         }
     }
 
@@ -75,35 +78,37 @@ object UpdateChecker {
 
     suspend fun downloadApk(context: Context, apkUrl: String, onProgress: (Int) -> Unit): File? =
         withContext(Dispatchers.IO) {
+            var conn: HttpURLConnection? = null
             try {
                 val apkDir = File(context.filesDir, "apk").also { it.mkdirs() }
                 val apkFile = File(apkDir, "update.apk")
                 if (apkFile.exists()) apkFile.delete()
 
                 val url = URL(apkUrl)
-                val conn = url.openConnection() as HttpURLConnection
+                conn = url.openConnection() as HttpURLConnection
                 conn.connect()
                 val totalBytes = conn.contentLength.toLong()
-                val input = conn.inputStream
-                val output = apkFile.outputStream()
-                val buffer = ByteArray(8192)
-                var downloaded = 0L
-                var read: Int
-                while (input.read(buffer).also { read = it } != -1) {
-                    output.write(buffer, 0, read)
-                    downloaded += read
-                    if (totalBytes > 0) {
-                        val pct = ((downloaded * 100) / totalBytes).toInt()
-                        withContext(Dispatchers.Main) { onProgress(pct) }
+                conn.inputStream.use { input ->
+                    apkFile.outputStream().use { output ->
+                        val buffer = ByteArray(8192)
+                        var downloaded = 0L
+                        var read: Int
+                        while (input.read(buffer).also { read = it } != -1) {
+                            output.write(buffer, 0, read)
+                            downloaded += read
+                            if (totalBytes > 0) {
+                                val pct = ((downloaded * 100) / totalBytes).toInt()
+                                withContext(Dispatchers.Main) { onProgress(pct) }
+                            }
+                        }
                     }
                 }
-                output.flush()
-                output.close()
-                input.close()
                 apkFile
             } catch (e: Exception) {
                 Logger.error("UpdateChecker", "Download failed", e)
                 null
+            } finally {
+                conn?.disconnect()
             }
         }
 
