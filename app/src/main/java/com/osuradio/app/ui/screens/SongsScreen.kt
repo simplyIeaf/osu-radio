@@ -13,20 +13,24 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PlaylistPlay
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,8 +48,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.osuradio.app.data.Playlist
 import com.osuradio.app.data.Song
 import com.osuradio.app.ui.components.SongSlot
 import com.osuradio.app.viewmodel.MainViewModel
@@ -58,7 +62,6 @@ fun SongsScreen(
     onSongClick: (Song) -> Unit
 ) {
     val context = LocalContext.current
-    val songs = viewModel.songs.collectAsState()
     val currentSong = viewModel.currentSong.collectAsState()
     val isPlaying = viewModel.isPlaying.collectAsState()
     val playlists = viewModel.playlists.collectAsState()
@@ -69,20 +72,24 @@ fun SongsScreen(
     // Song context menu state
     var menuAnchorSong by remember { mutableStateOf<Song?>(null) }
     var showSongMenu by remember { mutableStateOf(false) }
-
-    // Playlist selection dialog
-    var playlistDialogSong by remember { mutableStateOf<Song?>(null) }
+    // Whether the Playlist accordion is expanded inside the dropdown
+    var playlistSectionExpanded by remember { mutableStateOf(false) }
 
     // Delete confirmation
     var deleteConfirmSong by remember { mutableStateOf<Song?>(null) }
 
-    // Sync button debounce: grey out for 5 seconds after press
+    // Sync debounce: grey out for 5 seconds after press
     var syncCooldown by remember { mutableStateOf(false) }
     LaunchedEffect(syncCooldown) {
         if (syncCooldown) {
             delay(5_000L)
             syncCooldown = false
         }
+    }
+
+    // Reset accordion whenever the menu closes
+    LaunchedEffect(showSongMenu) {
+        if (!showSongMenu) playlistSectionExpanded = false
     }
 
     val displayedSongs = viewModel.getFilteredSongs()
@@ -123,7 +130,7 @@ fun SongsScreen(
                 },
                 singleLine = true
             )
-            // Sync button with 5-second debounce
+            // Sync button — greys out for 5 s after press
             IconButton(
                 onClick = {
                     if (!syncCooldown && !isSyncing.value) {
@@ -157,7 +164,7 @@ fun SongsScreen(
                         else "No songs found\nMake sure osu!droid is installed\nwith songs in the Songs folder",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        textAlign = TextAlign.Center
                     )
                 }
             }
@@ -175,37 +182,114 @@ fun SongsScreen(
                                 song = song,
                                 isPlaying = currentSong.value?.id == song.id && isPlaying.value,
                                 onSlotClick = { onSongClick(song) },
-                                onImageClick = { /* image click — no preview */ },
+                                onImageClick = { /* no-op */ },
                                 onMoreClick = {
                                     menuAnchorSong = song
+                                    playlistSectionExpanded = false
                                     showSongMenu = true
                                 }
                             )
-                            // Context dropdown menu
+
                             if (showSongMenu && menuAnchorSong?.id == song.id) {
                                 DropdownMenu(
                                     expanded = true,
                                     onDismissRequest = { showSongMenu = false }
                                 ) {
+                                    // ── Play ──────────────────────────────────────
                                     DropdownMenuItem(
                                         text = { Text("Play") },
+                                        leadingIcon = {
+                                            Icon(
+                                                Icons.Filled.PlayArrow,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        },
                                         onClick = {
                                             onSongClick(song)
                                             showSongMenu = false
                                         }
                                     )
-                                    // Add to Playlist — opens multi-select dialog
+
+                                    HorizontalDivider()
+
+                                    // ── Playlist accordion header ──────────────
                                     DropdownMenuItem(
-                                        text = { Text("Add to Playlist") },
+                                        text = { Text("Playlist") },
                                         leadingIcon = {
-                                            Icon(Icons.Filled.PlaylistAdd, contentDescription = null)
+                                            Icon(
+                                                Icons.Filled.PlaylistPlay,
+                                                contentDescription = null
+                                            )
+                                        },
+                                        trailingIcon = {
+                                            Icon(
+                                                if (playlistSectionExpanded)
+                                                    Icons.Filled.KeyboardArrowDown
+                                                else
+                                                    Icons.Filled.KeyboardArrowRight,
+                                                contentDescription = null
+                                            )
                                         },
                                         onClick = {
-                                            playlistDialogSong = song
-                                            showSongMenu = false
+                                            playlistSectionExpanded = !playlistSectionExpanded
                                         }
                                     )
-                                    // Delete song from osu!radio/Songs
+
+                                    // ── Inline playlist list (accordion) ───────
+                                    if (playlistSectionExpanded) {
+                                        if (playlists.value.isEmpty()) {
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        "No playlists yet",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                },
+                                                onClick = {},
+                                                enabled = false,
+                                                modifier = Modifier.padding(start = 16.dp)
+                                            )
+                                        } else {
+                                            playlists.value.forEach { playlist ->
+                                                val inPlaylist = playlist.songIds.contains(song.id)
+                                                DropdownMenuItem(
+                                                    text = {
+                                                        Text(
+                                                            playlist.name,
+                                                            style = MaterialTheme.typography.bodyMedium
+                                                        )
+                                                    },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            imageVector = if (inPlaylist)
+                                                                Icons.Filled.CheckCircle
+                                                            else
+                                                                Icons.Filled.RadioButtonUnchecked,
+                                                            contentDescription = if (inPlaylist)
+                                                                "In playlist" else "Not in playlist",
+                                                            tint = if (inPlaylist)
+                                                                MaterialTheme.colorScheme.primary
+                                                            else
+                                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        viewModel.toggleSongInPlaylist(
+                                                            playlist.id,
+                                                            song.id
+                                                        )
+                                                        // Stay open so user can pick more playlists
+                                                    },
+                                                    modifier = Modifier.padding(start = 16.dp)
+                                                )
+                                            }
+                                        }
+                                        HorizontalDivider()
+                                    }
+
+                                    // ── Delete ────────────────────────────────
                                     DropdownMenuItem(
                                         text = {
                                             Text(
@@ -234,17 +318,6 @@ fun SongsScreen(
         }
     }
 
-    // Playlist multi-select dialog
-    val pSong = playlistDialogSong
-    if (pSong != null) {
-        PlaylistSelectionDialog(
-            song = pSong,
-            playlists = playlists.value,
-            onToggle = { playlistId -> viewModel.toggleSongInPlaylist(playlistId, pSong.id) },
-            onDismiss = { playlistDialogSong = null }
-        )
-    }
-
     // Delete confirmation dialog
     val dSong = deleteConfirmSong
     if (dSong != null) {
@@ -263,7 +336,7 @@ fun SongsScreen(
                         viewModel.deleteSong(dSong)
                         deleteConfirmSong = null
                     },
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error
                     )
                 ) { Text("Delete") }
@@ -275,63 +348,4 @@ fun SongsScreen(
             }
         )
     }
-}
-
-/**
- * Dialog showing all playlists with checkboxes.
- * Songs already in a playlist show a check mark.
- */
-@Composable
-private fun PlaylistSelectionDialog(
-    song: Song,
-    playlists: List<Playlist>,
-    onToggle: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Add to Playlist") },
-        text = {
-            if (playlists.isEmpty()) {
-                Text(
-                    "No playlists yet. Create one in the Playlists tab.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            } else {
-                Column {
-                    playlists.forEach { playlist ->
-                        val isInPlaylist = playlist.songIds.contains(song.id)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Checkbox(
-                                checked = isInPlaylist,
-                                onCheckedChange = { onToggle(playlist.id) }
-                            )
-                            Text(
-                                text = playlist.name,
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(start = 8.dp)
-                            )
-                            if (isInPlaylist) {
-                                Icon(
-                                    Icons.Filled.Check,
-                                    contentDescription = "In playlist",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Done") }
-        }
-    )
 }
