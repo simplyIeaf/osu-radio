@@ -271,6 +271,12 @@ class MusicService : MediaLibraryService() {
             registerReceiver(headsetReceiver, IntentFilter(Intent.ACTION_HEADSET_PLUG))
         } catch (e: Exception) {
             Logger.error(TAG, "Failed to create MusicService", e)
+            // If the player was constructed but session setup failed partway through,
+            // mediaLibrarySession stays null and onDestroy's cleanup path never runs —
+            // release it here so we don't leak the native player/renderer resources.
+            if (mediaLibrarySession == null && ::player.isInitialized) {
+                player.release()
+            }
         }
     }
 
