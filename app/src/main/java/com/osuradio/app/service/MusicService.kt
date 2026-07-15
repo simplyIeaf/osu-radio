@@ -205,7 +205,7 @@ class MusicService : MediaLibraryService() {
         }
 
         override fun onSetMediaItems(
-            session: MediaLibrarySession,
+            session: MediaSession,
             controller: MediaSession.ControllerInfo,
             mediaItems: List<MediaItem>,
             startIndex: Int,
