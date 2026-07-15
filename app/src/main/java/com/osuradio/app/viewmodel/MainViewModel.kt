@@ -99,6 +99,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val sleepTimerEndAtMs: StateFlow<Long?> = _sleepTimerEndAtMs.asStateFlow()
     private var sleepTimerJob: Job? = null
 
+    /** True while a manual sync scan is running */
+    private val _isSyncing = MutableStateFlow(false)
+    val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
+
     private val downloadManager: DownloadManager by lazy {
         DownloadManager(getApplication()) { song -> mergeSong(song) }
     }
@@ -143,6 +147,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val localBinder = binder as? MusicService.LocalBinder
             musicService = localBinder?.getService()
             serviceBound = true
+            // Wire up shuffle/loop toggle callbacks from notification
+            musicService?.onShuffleToggled = { toggleShuffle() }
+            musicService?.onLoopToggled = { toggleRepeat() }
+            // Sync current shuffle/loop state to service
+            musicService?.updateShuffleState(_settings.value.shuffle)
+            musicService?.updateLoopState(_settings.value.repeat)
             attachPlayerListener()
             startPositionUpdater()
         }
@@ -234,6 +244,59 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 Logger.error(TAG, "Initialization failed", e)
                 withContext(Dispatchers.Main) {
                     _isLoading.value = false
+                }
+            }
+        }
+    }
+
+    /**
+     * Manually re-scan osu!droid Songs and osu!radio Songs directories for new songs.
+     * Called from the sync button in SongsScreen.
+     */
+    fun syncSongs(context: Context) {
+        if (_isSyncing.value) return
+        viewModelScope.launch(Dispatchers.IO) {
+            withContext(Dispatchers.Main) { _isSyncing.value = true }
+            try {
+                val existingSongs = SongScanner.loadAlreadyScannedSongs(context)
+                val newSongs = SongScanner.scanAndCopySongs(context)
+                val allSongsMap = mutableMapOf<String, Song>()
+                existingSongs.forEach { allSongsMap[it.id] = it }
+                newSongs.forEach { allSongsMap[it.id] = it }
+                val allSongs = allSongsMap.values.toList().sortedBy { it.artist }
+                withContext(Dispatchers.Main) {
+                    _songs.value = allSongs
+                    _queue.value = allSongs
+                }
+            } catch (e: Exception) {
+                Logger.error(TAG, "Sync failed", e)
+            } finally {
+                withContext(Dispatchers.Main) { _isSyncing.value = false }
+            }
+        }
+    }
+
+    /**
+     * Delete a song's folder from the osu!radio/Songs directory and remove it from the library.
+     */
+    fun deleteSong(song: Song) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val folder = File(song.folderPath)
+                if (folder.exists()) folder.deleteRecursively()
+            } catch (e: Exception) {
+                Logger.error(TAG, "Failed to delete song folder: ${song.folderPath}", e)
+            }
+            withContext(Dispatchers.Main) {
+                _songs.value = _songs.value.filter { it.id != song.id }
+                _queue.value = _queue.value.filter { it.id != song.id }
+                // Remove from any playlists too
+                _playlists.value = _playlists.value.map { playlist ->
+                    if (playlist.songIds.contains(song.id)) {
+                        val updated = playlist.copy(songIds = playlist.songIds.filter { it != song.id })
+                        ConfigManager.updatePlaylist(updated)
+                        updated
+                    } else playlist
                 }
             }
         }
@@ -346,13 +409,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshDownloadSearch() {
         downloadPage = 0
         downloadHasMore = true
+        val query = _downloadSearchQuery.value
+        val sort = _downloadSortOption.value
+        val status = _downloadStatusOption.value
         viewModelScope.launch {
             _downloadLoading.value = true
+            // Clear previous results so stale data doesn't show while loading
+            _downloadResults.value = emptyList()
             val results = NerinyanApi.search(
-                query = _downloadSearchQuery.value,
+                query = query,
                 page = downloadPage,
-                sort = _downloadSortOption.value,
-                status = _downloadStatusOption.value
+                sort = sort,
+                status = status
             )
             _downloadResults.value = results
             downloadHasMore = results.isNotEmpty()
@@ -408,10 +476,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         service.playAudio(song.audioPath, song.title, song.artist, song.imagePath)
     }
 
-    fun previewSong(song: Song) {
-        musicService?.previewAudio(song.audioPath)
-    }
-
     fun pauseResume() {
         musicService?.pauseResume()
         _isPlaying.value = musicService?.getPlayer()?.isPlaying ?: false
@@ -464,6 +528,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _settings.value = settings
         ConfigManager.saveSettings(settings)
         musicService?.setTransition(settings.audioTransition)
+        musicService?.updateShuffleState(settings.shuffle)
+        musicService?.updateLoopState(settings.repeat)
     }
 
     fun toggleShuffle() {
@@ -503,20 +569,43 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _playlists.value = ConfigManager.getPlaylists()
     }
 
+    fun renamePlaylist(playlistId: String, newName: String) {
+        _playlists.value = _playlists.value.map { playlist ->
+            if (playlist.id == playlistId) {
+                val updated = playlist.copy(name = newName)
+                ConfigManager.updatePlaylist(updated)
+                updated
+            } else playlist
+        }
+    }
+
     fun addSongToPlaylist(playlistId: String, songId: String) {
-        val playlist = _playlists.value.find { it.id == playlistId } ?: return
-        if (!playlist.songIds.contains(songId)) {
-            playlist.songIds.add(songId)
-            ConfigManager.updatePlaylist(playlist)
-            _playlists.value = ConfigManager.getPlaylists()
+        _playlists.value = _playlists.value.map { playlist ->
+            if (playlist.id == playlistId && !playlist.songIds.contains(songId)) {
+                val updated = playlist.copy(songIds = playlist.songIds + songId)
+                ConfigManager.updatePlaylist(updated)
+                updated
+            } else playlist
         }
     }
 
     fun removeSongFromPlaylist(playlistId: String, songId: String) {
+        _playlists.value = _playlists.value.map { playlist ->
+            if (playlist.id == playlistId) {
+                val updated = playlist.copy(songIds = playlist.songIds.filter { it != songId })
+                ConfigManager.updatePlaylist(updated)
+                updated
+            } else playlist
+        }
+    }
+
+    fun toggleSongInPlaylist(playlistId: String, songId: String) {
         val playlist = _playlists.value.find { it.id == playlistId } ?: return
-        playlist.songIds.remove(songId)
-        ConfigManager.updatePlaylist(playlist)
-        _playlists.value = ConfigManager.getPlaylists()
+        if (playlist.songIds.contains(songId)) {
+            removeSongFromPlaylist(playlistId, songId)
+        } else {
+            addSongToPlaylist(playlistId, songId)
+        }
     }
 
     fun playPlaylist(playlist: Playlist, shuffle: Boolean = false) {
