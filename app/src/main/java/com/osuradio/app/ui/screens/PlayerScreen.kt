@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -111,45 +112,54 @@ fun PlayerScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(8.dp))
-            Row(
+
+            // Header row — back button balanced with equal-width spacer on right so "Now Playing" is truly centered
+            Box(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                contentAlignment = Alignment.Center
             ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        Icons.Filled.ArrowBackIosNew,
-                        contentDescription = "Back",
-                        tint = MaterialTheme.colorScheme.onBackground
-                    )
-                }
                 Text(
                     text = "Now Playing",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.weight(1f),
                     textAlign = TextAlign.Center
                 )
-                IconButton(onClick = {
-                    if (sleepTimerEndAtMs.value != null) {
-                        viewModel.cancelSleepTimer()
-                    } else {
-                        showSleepTimer = true
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.Filled.ArrowBackIosNew,
+                            contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
                     }
-                }) {
-                    Icon(
-                        Icons.Filled.Bedtime,
-                        contentDescription = "Sleep timer",
-                        tint = if (sleepTimerEndAtMs.value != null)
-                            MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground
-                    )
-                }
-                IconButton(onClick = { showMods = true }) {
-                    Icon(
-                        Icons.Filled.Tune,
-                        contentDescription = "Mods",
-                        tint = if (modSettings.value.activeMod.name != "NONE")
-                            MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground
-                    )
+                    Row {
+                        IconButton(onClick = {
+                            if (sleepTimerEndAtMs.value != null) {
+                                viewModel.cancelSleepTimer()
+                            } else {
+                                showSleepTimer = true
+                            }
+                        }) {
+                            Icon(
+                                Icons.Filled.Bedtime,
+                                contentDescription = "Sleep timer",
+                                tint = if (sleepTimerEndAtMs.value != null)
+                                    MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground
+                            )
+                        }
+                        IconButton(onClick = { showMods = true }) {
+                            Icon(
+                                Icons.Filled.Tune,
+                                contentDescription = "Mods",
+                                tint = if (modSettings.value.activeMod.name != "NONE")
+                                    MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground
+                            )
+                        }
+                    }
                 }
             }
 
