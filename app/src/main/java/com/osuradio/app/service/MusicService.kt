@@ -1,29 +1,38 @@
 package com.osuradio.app.service
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioManager
+import android.media.audiofx.Equalizer
+import android.media.audiofx.LoudnessEnhancer
+import android.net.Uri
 import android.os.Binder
-import android.os.Build
+import android.os.Bundle
 import android.os.IBinder
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
-import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.LibraryResult
+import androidx.media3.session.MediaLibrarySession
+import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
-import androidx.media3.session.MediaSessionService
-import androidx.media3.ui.PlayerNotificationManager
+import com.google.common.collect.ImmutableList
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.ListenableFuture
 import com.osuradio.app.MainActivity
-import com.osuradio.app.R
 import com.osuradio.app.data.AudioTransition
+import com.osuradio.app.data.EqualizerSettings
 import com.osuradio.app.data.ModSettings
+import com.osuradio.app.data.RepeatMode
+import com.osuradio.app.data.Song
 import com.osuradio.app.data.SongMod
 import com.osuradio.app.utils.Logger
 import kotlinx.coroutines.CoroutineScope
@@ -34,15 +43,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 
-class MusicService : MediaSessionService() {
+class MusicService : MediaLibraryService() {
     private val TAG = "MusicService"
-    private var mediaSession: MediaSession? = null
     private lateinit var player: ExoPlayer
-
-    /** Wrapped player that redirects prev/next to ViewModel callbacks instead of seeking. */
-    private lateinit var wrappedPlayer: ForwardingPlayer
-
-    private var playerNotificationManager: PlayerNotificationManager? = null
+    private var mediaLibrarySession: MediaLibrarySession? = null
     private val scope = CoroutineScope(Dispatchers.Main + Job())
     private var transitionJob: Job? = null
     private var modRampJob: Job? = null
@@ -50,26 +54,169 @@ class MusicService : MediaSessionService() {
     private val binder = LocalBinder()
     private lateinit var sessionActivityPendingIntent: PendingIntent
 
-    /**
-     * Called when the user taps "next" in the media notification.
-     * Set by ViewModel to call skipToNext().
-     */
-    var onNextRequested: (() -> Unit)? = null
+    // ── Audio effects ──────────────────────────────────────────────────────────
+    private var equalizer: Equalizer? = null
+    private var loudnessEnhancer: LoudnessEnhancer? = null
+    private var pendingEqSettings: EqualizerSettings = EqualizerSettings()
+    private var pendingLoudnessEnabled: Boolean = false
+    private var pendingLoudnessGainDb: Int = 3
 
-    /**
-     * Called when the user taps "previous" in the media notification.
-     * Set by ViewModel to call skipToPrev().
-     */
-    var onPrevRequested: (() -> Unit)? = null
+    // ── Headphone reconnect tracking ───────────────────────────────────────────
+    private var wasPlayingBeforeUnplug = false
 
+    // ── Songs catalogue for Android Auto browsing ──────────────────────────────
+    var allSongs: List<Song> = emptyList()
+
+    // ── Callbacks wired by ViewModel ───────────────────────────────────────────
+    /** Fires on every automatic media-item transition (auto-advance, shuffle). */
+    var onSongChanged: ((Song?) -> Unit)? = null
+    /** Fires on every isPlaying change. */
+    var onIsPlayingChanged: ((Boolean) -> Unit)? = null
+
+    // ── Android Auto library IDs ───────────────────────────────────────────────
     companion object {
-        const val CHANNEL_ID = "osu_radio_playback"
-        const val NOTIFICATION_ID = 1
+        private const val ROOT_ID  = "root"
+        private const val SONGS_ID = "songs"
     }
 
     inner class LocalBinder : Binder() {
         fun getService(): MusicService = this@MusicService
     }
+
+    // ── Receivers ─────────────────────────────────────────────────────────────
+
+    /** Handles wired headphone unplugging — pauses and remembers intent to resume. */
+    private val noisyReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != AudioManager.ACTION_AUDIO_BECOMING_NOISY) return
+            if (player.isPlaying) {
+                wasPlayingBeforeUnplug = true
+                player.pause()
+            }
+        }
+    }
+
+    /** Handles wired headphone reconnect — resumes if we paused due to unplug. */
+    private val headsetReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != Intent.ACTION_HEADSET_PLUG) return
+            when (intent.getIntExtra("state", -1)) {
+                1 -> { // Plugged in
+                    if (wasPlayingBeforeUnplug && !player.isPlaying) {
+                        scope.launch { delay(150); player.play() }
+                        wasPlayingBeforeUnplug = false
+                    }
+                }
+                0 -> { /* Unplugged — handled by noisyReceiver */ }
+            }
+        }
+    }
+
+    // ── Player listener ───────────────────────────────────────────────────────
+
+    private val playerListener = object : Player.Listener {
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO ||
+                reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK
+            ) {
+                val song = allSongs.find { it.id == mediaItem?.mediaId }
+                onSongChanged?.invoke(song)
+            }
+        }
+
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            onIsPlayingChanged?.invoke(isPlaying)
+        }
+
+        /**
+         * Audio session ID changes after the audio renderer is initialized.
+         * Create / recreate audio effects here to bind them to the correct session.
+         */
+        override fun onAudioSessionIdChanged(audioSessionId: Int) {
+            createAudioEffects(audioSessionId)
+        }
+    }
+
+    // ── Android Auto library callback ─────────────────────────────────────────
+
+    private inner class LibraryCallback : MediaLibrarySession.Callback {
+
+        private val browserRoot = MediaItem.Builder()
+            .setMediaId(ROOT_ID)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle("osu!radio")
+                    .setIsBrowsable(true)
+                    .setIsPlayable(false)
+                    .build()
+            ).build()
+
+        override fun onGetLibraryRoot(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            params: MediaLibrarySession.LibraryParams?
+        ): ListenableFuture<LibraryResult<MediaItem>> =
+            Futures.immediateFuture(LibraryResult.ofItem(browserRoot, params))
+
+        override fun onGetChildren(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            parentId: String,
+            page: Int,
+            pageSize: Int,
+            params: MediaLibrarySession.LibraryParams?
+        ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
+            val items: List<MediaItem> = when (parentId) {
+                ROOT_ID  -> listOf(
+                    MediaItem.Builder()
+                        .setMediaId(SONGS_ID)
+                        .setMediaMetadata(
+                            MediaMetadata.Builder()
+                                .setTitle("Songs")
+                                .setIsBrowsable(true)
+                                .setIsPlayable(false)
+                                .build()
+                        ).build()
+                )
+                SONGS_ID -> allSongs.map { it.toMediaItem() }
+                else     -> emptyList()
+            }
+            val from = (page * pageSize).coerceAtMost(items.size)
+            val to   = (from + pageSize).coerceAtMost(items.size)
+            return Futures.immediateFuture(
+                LibraryResult.ofItemList(ImmutableList.copyOf(items.subList(from, to)), params)
+            )
+        }
+
+        /** Resolve mediaId → real URI so Android Auto can play from the browsable list. */
+        override fun onAddMediaItems(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            mediaItems: List<MediaItem>
+        ): ListenableFuture<List<MediaItem>> {
+            val resolved = mediaItems.map { item ->
+                allSongs.find { it.id == item.mediaId }?.toMediaItem() ?: item
+            }
+            return Futures.immediateFuture(resolved)
+        }
+
+        override fun onSetMediaItems(
+            session: MediaLibrarySession,
+            controller: MediaSession.ControllerInfo,
+            mediaItems: List<MediaItem>,
+            startIndex: Int,
+            startPositionMs: Long
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            val resolved = mediaItems.map { item ->
+                allSongs.find { it.id == item.mediaId }?.toMediaItem() ?: item
+            }
+            return Futures.immediateFuture(
+                MediaSession.MediaItemsWithStartPosition(resolved, startIndex, startPositionMs)
+            )
+        }
+    }
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     override fun onCreate() {
         super.onCreate()
@@ -84,28 +231,15 @@ class MusicService : MediaSessionService() {
                 .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
 
             player = ExoPlayer.Builder(this, renderersFactory)
-                .setAudioAttributes(audioAttributes, true)
-                .setHandleAudioBecomingNoisy(true)
+                .setAudioAttributes(audioAttributes, /* handleAudioFocus = */ true)
+                // We manage BECOMING_NOISY ourselves via noisyReceiver for reconnect tracking
+                .setHandleAudioBecomingNoisy(false)
                 .build()
 
             player.repeatMode = Player.REPEAT_MODE_OFF
-
-            // Wrap the player so prev/next route to ViewModel callbacks
-            // instead of trying to seek within a single-item queue.
-            wrappedPlayer = object : ForwardingPlayer(player) {
-                override fun seekToPreviousMediaItem() { onPrevRequested?.invoke() }
-                override fun seekToNextMediaItem()     { onNextRequested?.invoke() }
-                override fun seekToPrevious()          { onPrevRequested?.invoke() }
-                override fun seekToNext()              { onNextRequested?.invoke() }
-
-                // Keep the commands available so the notification buttons appear
-                override fun getAvailableCommands(): Player.Commands {
-                    return super.getAvailableCommands().buildUpon()
-                        .add(COMMAND_SEEK_TO_PREVIOUS)
-                        .add(COMMAND_SEEK_TO_NEXT)
-                        .build()
-                }
-            }
+            // Hand audio decode off to DSP co-processor when idle → better battery life
+            player.experimentalSetOffloadSchedulingEnabled(true)
+            player.addListener(playerListener)
 
             val activityIntent = Intent(this, MainActivity::class.java)
             sessionActivityPendingIntent = PendingIntent.getActivity(
@@ -113,118 +247,132 @@ class MusicService : MediaSessionService() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            createNotificationChannel()
-
-            mediaSession = MediaSession.Builder(this, wrappedPlayer)
+            mediaLibrarySession = MediaLibrarySession.Builder(this, player, LibraryCallback())
                 .setSessionActivity(sessionActivityPendingIntent)
                 .build()
 
-            setupPlayerNotificationManager()
+            // Register headphone receivers
+            registerReceiver(noisyReceiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(headsetReceiver, IntentFilter(Intent.ACTION_HEADSET_PLUG))
         } catch (e: Exception) {
             Logger.error(TAG, "Failed to create MusicService", e)
         }
     }
 
-    private fun setupPlayerNotificationManager() {
-        try {
-            playerNotificationManager = PlayerNotificationManager
-                .Builder(this, NOTIFICATION_ID, CHANNEL_ID)
-                .setMediaDescriptionAdapter(object : PlayerNotificationManager.MediaDescriptionAdapter {
-                    override fun getCurrentContentTitle(player: Player): CharSequence =
-                        player.mediaMetadata.title ?: "Now Playing"
+    // ── onBind: return session binder for media controllers, local binder otherwise ──
 
-                    override fun getCurrentContentText(player: Player): CharSequence? =
-                        player.mediaMetadata.artist ?: ""
-
-                    // No cover art in the notification
-                    override fun getCurrentLargeIcon(
-                        player: Player,
-                        callback: PlayerNotificationManager.BitmapCallback
-                    ): android.graphics.Bitmap? = null
-
-                    override fun createCurrentContentIntent(player: Player): PendingIntent? =
-                        sessionActivityPendingIntent
-                })
-                .setSmallIconResourceId(R.drawable.ic_radio)
-                .setNotificationListener(object : PlayerNotificationManager.NotificationListener {
-                    override fun onNotificationPosted(
-                        notificationId: Int,
-                        notification: android.app.Notification,
-                        ongoing: Boolean
-                    ) {
-                        if (ongoing) startForeground(notificationId, notification)
-                    }
-                    override fun onNotificationCancelled(notificationId: Int, dismissedByUser: Boolean) {
-                        stopForeground(STOP_FOREGROUND_REMOVE)
-                    }
-                })
-                .build()
-
-            // Use wrappedPlayer so the notification prev/next buttons fire our callbacks
-            playerNotificationManager?.setPlayer(wrappedPlayer)
-        } catch (e: Exception) {
-            Logger.error(TAG, "Failed to setup PlayerNotificationManager", e)
-        }
+    override fun onBind(intent: Intent?): IBinder? {
+        super.onBind(intent)?.let { return it }  // media session controller connection
+        return binder                              // ViewModel connection
     }
 
-    override fun onBind(intent: Intent?): IBinder {
-        super.onBind(intent)
-        return binder
-    }
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? =
+        mediaLibrarySession
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
-
-    /** Returns the raw ExoPlayer for attaching listeners in the ViewModel. */
     fun getPlayer(): ExoPlayer = player
 
-    fun playAudio(
-        path: String,
-        title: String = "",
-        artist: String = "",
-        imagePath: String? = null,
-        startMs: Long = 0L
-    ) {
-        try {
-            // Store image path but do NOT embed artwork bytes — keep notification art-free
-            val metadata = MediaMetadata.Builder()
-                .setTitle(title.ifEmpty { File(path).nameWithoutExtension })
-                .setArtist(artist)
-                .build()
+    // ── Queue management (gapless) ────────────────────────────────────────────
 
-            val mediaItem = MediaItem.Builder()
-                .setUri(android.net.Uri.fromFile(File(path)))
-                .setMediaMetadata(metadata)
-                .build()
-
-            player.setMediaItem(mediaItem)
+    /**
+     * Load [songs] into ExoPlayer as a full gapless playlist.
+     * ExoPlayer pre-buffers ahead so transitions are seamless.
+     */
+    fun setQueue(songs: List<Song>) {
+        allSongs = songs
+        val mediaItems = songs.map { it.toMediaItem() }
+        player.setMediaItems(mediaItems, /* resetPosition = */ false)
+        if (player.playbackState == Player.STATE_IDLE) {
             player.prepare()
-            if (startMs > 0) player.seekTo(startMs)
-            applyTransitionStart()
-            player.play()
-        } catch (e: Exception) {
-            Logger.error(TAG, "Failed to play audio: $path", e)
         }
     }
 
-    fun pauseResume() {
-        if (player.isPlaying) player.pause() else player.play()
+    /** Seek to [index] in the current queue and begin playback. */
+    fun playAtIndex(index: Int) {
+        player.seekTo(index, 0L)
+        applyTransitionStart()
+        player.play()
     }
 
-    fun pause() {
-        player.pause()
+    fun pauseResume() { if (player.isPlaying) player.pause() else player.play() }
+    fun pause()       { player.pause() }
+    fun seekTo(ms: Long) { player.seekTo(ms) }
+
+    fun setShuffleMode(enabled: Boolean) { player.shuffleModeEnabled = enabled }
+    fun setRepeatMode(mode: RepeatMode) {
+        player.repeatMode = when (mode) {
+            RepeatMode.NONE -> Player.REPEAT_MODE_OFF
+            RepeatMode.ALL  -> Player.REPEAT_MODE_ALL
+            RepeatMode.ONE  -> Player.REPEAT_MODE_ONE
+        }
     }
 
-    fun seekTo(positionMs: Long) {
-        player.seekTo(positionMs)
+    // ── Audio effects ─────────────────────────────────────────────────────────
+
+    fun applyEqualizerSettings(settings: EqualizerSettings) {
+        pendingEqSettings = settings
+        val sessionId = player.audioSessionId
+        if (sessionId != C.AUDIO_SESSION_ID_UNSET && sessionId != 0) {
+            applyEqToSession(sessionId, settings)
+        }
     }
+
+    fun applyLoudnessSettings(enabled: Boolean, gainDb: Int) {
+        pendingLoudnessEnabled = enabled
+        pendingLoudnessGainDb  = gainDb
+        val sessionId = player.audioSessionId
+        if (sessionId != C.AUDIO_SESSION_ID_UNSET && sessionId != 0) {
+            applyLoudnessToSession(sessionId, enabled, gainDb)
+        }
+    }
+
+    private fun createAudioEffects(sessionId: Int) {
+        if (sessionId == C.AUDIO_SESSION_ID_UNSET || sessionId == 0) return
+        applyEqToSession(sessionId, pendingEqSettings)
+        applyLoudnessToSession(sessionId, pendingLoudnessEnabled, pendingLoudnessGainDb)
+    }
+
+    private fun applyEqToSession(sessionId: Int, settings: EqualizerSettings) {
+        try {
+            equalizer?.release()
+            equalizer = Equalizer(0, sessionId).also { eq ->
+                if (settings.enabled) {
+                    val minLevel = eq.bandLevelRange[0].toInt()
+                    val maxLevel = eq.bandLevelRange[1].toInt()
+                    val count    = eq.numberOfBands.toInt()
+                    for (i in 0 until minOf(count, settings.bandLevels.size)) {
+                        val clamped = settings.bandLevels[i].coerceIn(minLevel, maxLevel)
+                        eq.setBandLevel(i.toShort(), clamped.toShort())
+                    }
+                }
+                eq.enabled = settings.enabled
+            }
+        } catch (e: Exception) {
+            Logger.error(TAG, "Failed to create Equalizer for session $sessionId", e)
+        }
+    }
+
+    private fun applyLoudnessToSession(sessionId: Int, enabled: Boolean, gainDb: Int) {
+        try {
+            loudnessEnhancer?.release()
+            loudnessEnhancer = LoudnessEnhancer(sessionId).also { le ->
+                if (enabled) le.setTargetGain(gainDb * 100)  // dB → mB
+                le.enabled = enabled
+            }
+        } catch (e: Exception) {
+            Logger.error(TAG, "Failed to create LoudnessEnhancer for session $sessionId", e)
+        }
+    }
+
+    // ── Mods ──────────────────────────────────────────────────────────────────
 
     fun applyMod(modSettings: ModSettings, currentPositionMs: Long) {
         try {
             modRampJob?.cancel()
             val wasPlaying = player.isPlaying
             when (modSettings.activeMod) {
-                SongMod.WIND_UP   -> startModRamp(startSpeed = 1.0f, endSpeed = 1.8f, durationMs = 45_000L)
-                SongMod.WIND_DOWN -> startModRamp(startSpeed = 1.0f, endSpeed = 0.6f, durationMs = 45_000L)
+                SongMod.WIND_UP   -> startModRamp(1.0f, 1.8f, 45_000L)
+                SongMod.WIND_DOWN -> startModRamp(1.0f, 0.6f, 45_000L)
                 else -> {
                     val (speed, pitch) = resolveModParams(modSettings)
                     player.setPlaybackParameters(PlaybackParameters(speed, pitch))
@@ -239,53 +387,32 @@ class MusicService : MediaSessionService() {
 
     private fun startModRamp(startSpeed: Float, endSpeed: Float, durationMs: Long) {
         player.setPlaybackParameters(PlaybackParameters(startSpeed, startSpeed))
-        val steps = 60
-        val stepDelay = durationMs / steps
         modRampJob = scope.launch {
-            for (i in 1..steps) {
-                delay(stepDelay)
-                val fraction = i / steps.toFloat()
+            repeat(60) { i ->
+                delay(durationMs / 60)
+                val fraction = (i + 1) / 60f
                 val speed = startSpeed + (endSpeed - startSpeed) * fraction
                 player.setPlaybackParameters(PlaybackParameters(speed, speed))
             }
         }
     }
 
-    private fun resolveModParams(modSettings: ModSettings): Pair<Float, Float> {
-        return when (modSettings.activeMod) {
-            SongMod.NONE         -> Pair(1.0f, 1.0f)
-            SongMod.DAYCORE      -> Pair(0.75f, 0.75f)
-            SongMod.NIGHTCORE    -> Pair(1.5f, 1.5f)
-            SongMod.DOUBLE_TIME  -> Pair(1.5f, 1.0f)
-            SongMod.HALF_TIME    -> Pair(0.75f, 1.0f)
-            SongMod.WIND_UP      -> Pair(1.3f, 1.1f)
-            SongMod.WIND_DOWN    -> Pair(0.8f, 0.9f)
-            SongMod.BASS_BOOST   -> Pair(1.0f, 0.85f)
-            SongMod.VAPORWAVE    -> Pair(0.7f, 0.7f)
-            SongMod.CUSTOM_SPEED -> Pair(modSettings.customSpeed, modSettings.customSpeed)
-        }
+    private fun resolveModParams(modSettings: ModSettings): Pair<Float, Float> = when (modSettings.activeMod) {
+        SongMod.NONE         -> Pair(1.0f, 1.0f)
+        SongMod.DAYCORE      -> Pair(0.75f, 0.75f)
+        SongMod.NIGHTCORE    -> Pair(1.5f, 1.5f)
+        SongMod.DOUBLE_TIME  -> Pair(1.5f, 1.0f)
+        SongMod.HALF_TIME    -> Pair(0.75f, 1.0f)
+        SongMod.WIND_UP      -> Pair(1.3f, 1.1f)
+        SongMod.WIND_DOWN    -> Pair(0.8f, 0.9f)
+        SongMod.BASS_BOOST   -> Pair(1.0f, 0.85f)
+        SongMod.VAPORWAVE    -> Pair(0.7f, 0.7f)
+        SongMod.CUSTOM_SPEED -> Pair(modSettings.customSpeed, modSettings.customSpeed)
     }
 
-    fun setTransition(transition: AudioTransition) {
-        currentTransition = transition
-    }
+    // ── Transitions ───────────────────────────────────────────────────────────
 
-    fun stopWithTransition() {
-        transitionJob?.cancel()
-        when (currentTransition) {
-            AudioTransition.FADE_IN_OUT, AudioTransition.CROSSFADE -> {
-                transitionJob = scope.launch {
-                    repeat(20) { i ->
-                        player.volume = 1f - (i + 1) / 20f
-                        delay(25)
-                    }
-                    player.stop()
-                    player.volume = 1f
-                }
-            }
-            else -> player.stop()
-        }
-    }
+    fun setTransition(transition: AudioTransition) { currentTransition = transition }
 
     private fun applyTransitionStart() {
         transitionJob?.cancel()
@@ -293,59 +420,53 @@ class MusicService : MediaSessionService() {
             AudioTransition.FADE_IN_OUT, AudioTransition.CROSSFADE -> {
                 player.volume = 0f
                 transitionJob = scope.launch {
-                    repeat(20) { i ->
-                        player.volume = (i + 1) / 20f
-                        delay(25)
-                    }
+                    repeat(20) { i -> player.volume = (i + 1) / 20f; delay(25) }
                 }
             }
             AudioTransition.SWOOSH -> {
                 player.volume = 0f
                 transitionJob = scope.launch {
                     delay(100)
-                    repeat(10) { i ->
-                        player.volume = (i + 1) / 10f
-                        delay(30)
-                    }
+                    repeat(10) { i -> player.volume = (i + 1) / 10f; delay(30) }
                 }
             }
             AudioTransition.NONE -> player.volume = 1f
         }
     }
 
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Music Playback",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "osu!radio playback controls"
-                setShowBadge(false)
-            }
-            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(channel)
-        }
-    }
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        val currentPlayer = mediaSession?.player
-        if (currentPlayer == null || !currentPlayer.playWhenReady || currentPlayer.mediaItemCount == 0) {
-            stopSelf()
-        }
+        val p = mediaLibrarySession?.player
+        if (p == null || !p.playWhenReady || p.mediaItemCount == 0) stopSelf()
         super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
-        playerNotificationManager?.setPlayer(null)
+        try { unregisterReceiver(noisyReceiver) } catch (_: Exception) {}
+        try { unregisterReceiver(headsetReceiver) } catch (_: Exception) {}
+        equalizer?.release()
+        loudnessEnhancer?.release()
         transitionJob?.cancel()
         modRampJob?.cancel()
         scope.cancel()
-        mediaSession?.run {
-            player.release()
-            release()
-            mediaSession = null
-        }
+        mediaLibrarySession?.run { player.release(); release(); mediaLibrarySession = null }
         super.onDestroy()
     }
 }
+
+// ── Extension ─────────────────────────────────────────────────────────────────
+
+fun Song.toMediaItem(): MediaItem = MediaItem.Builder()
+    .setMediaId(id)
+    .setUri(Uri.fromFile(File(audioPath)))
+    .setMediaMetadata(
+        MediaMetadata.Builder()
+            .setTitle(title)
+            .setArtist(artist)
+            .setIsBrowsable(false)
+            .setIsPlayable(true)
+            .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
+            .build()
+    )
+    .build()
