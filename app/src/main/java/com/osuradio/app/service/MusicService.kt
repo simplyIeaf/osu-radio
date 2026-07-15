@@ -173,7 +173,7 @@ class MusicService : MediaSessionService() {
      */
     private fun buildMediaButtonPreferences(): ImmutableList<CommandButton> {
         val shuffleIcon = if (isShuffleOn)
-            CommandButton.ICON_SHUFFLE
+            CommandButton.ICON_SHUFFLE_ON
         else
             CommandButton.ICON_SHUFFLE_OFF
 
