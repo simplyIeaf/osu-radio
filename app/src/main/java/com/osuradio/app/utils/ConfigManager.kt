@@ -3,6 +3,7 @@ package com.osuradio.app.utils
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.osuradio.app.data.AppSettings
+import com.osuradio.app.data.EqualizerSettings
 import com.osuradio.app.data.Playlist
 import java.io.File
 
@@ -28,7 +29,13 @@ object ConfigManager {
             val file = configFile ?: return
             if (file.exists()) {
                 val json = file.readText()
-                currentConfig = gson.fromJson(json, Config::class.java) ?: Config()
+                val loaded = gson.fromJson(json, Config::class.java) ?: Config()
+                // Null-safety for fields added after initial release
+                currentConfig = loaded.copy(
+                    settings = loaded.settings.copy(
+                        equalizerSettings = loaded.settings.equalizerSettings ?: EqualizerSettings()
+                    )
+                )
             }
         } catch (e: Exception) {
             Logger.error(TAG, "Failed to load config", e)
@@ -39,8 +46,7 @@ object ConfigManager {
     fun save() {
         try {
             val file = configFile ?: return
-            val json = gson.toJson(currentConfig)
-            file.writeText(json)
+            file.writeText(gson.toJson(currentConfig))
         } catch (e: Exception) {
             Logger.error(TAG, "Failed to save config", e)
         }
@@ -73,9 +79,6 @@ object ConfigManager {
 
     fun updatePlaylist(playlist: Playlist) {
         val idx = currentConfig.playlists.indexOfFirst { it.id == playlist.id }
-        if (idx >= 0) {
-            currentConfig.playlists[idx] = playlist
-            save()
-        }
+        if (idx >= 0) { currentConfig.playlists[idx] = playlist; save() }
     }
 }
