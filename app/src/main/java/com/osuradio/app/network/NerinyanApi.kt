@@ -5,6 +5,7 @@ import com.google.gson.reflect.TypeToken
 import com.osuradio.app.data.NerinyanBeatmapSet
 import com.osuradio.app.utils.Logger
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -16,7 +17,7 @@ import java.util.concurrent.TimeUnit
 
 object NerinyanApi {
     private const val TAG = "NerinyanApi"
-    private const val BASE_URL = "https://api.nerinyan.moe"
+    private const val BASE_URL = "https://osu.direct/api"
     private val gson = Gson()
 
     private val client = OkHttpClient.Builder()
@@ -29,24 +30,24 @@ object NerinyanApi {
         .build()
 
     enum class SortOption(val label: String, val param: String) {
-        DEFAULT("Default", "default"),
-        TITLE("Title", "title"),
-        ARTIST("Artist", "artist"),
-        LAST_UPDATED("Last updated", "last_updated"),
-        RANKED_DATE("Ranked date", "ranked_date"),
-        FAVORITE_COUNT("Favorite count", "favourite_count"),
-        PLAY_COUNT("Play count", "play_count")
+        DEFAULT("Default", ""),
+        TITLE("Title", "title:asc"),
+        ARTIST("Artist", "artist:asc"),
+        SUBMITTED_DATE("Submitted date", "submitted_date:desc"),
+        RANKED_DATE("Ranked date", "ranked_date:desc"),
+        LAST_UPDATED("Last updated", "last_updated:desc"),
+        BPM("BPM", "bpm:asc")
     }
 
     enum class StatusOption(val label: String, val param: String) {
-        ALL("All", "all"),
-        RANKED("Ranked", "ranked"),
-        QUALIFIED("Qualified", "qualified"),
-        LOVED("Loved", "loved"),
-        PENDING("Pending", "pending"),
-        WIP("WIP", "wip"),
-        GRAVEYARD("Graveyard", "graveyard"),
-        UNRANKED("Unranked", "unranked")
+        ALL("All", ""),
+        RANKED("Ranked", "1"),
+        APPROVED("Approved", "2"),
+        QUALIFIED("Qualified", "3"),
+        LOVED("Loved", "4"),
+        PENDING("Pending", "0"),
+        WIP("WIP", "-1"),
+        GRAVEYARD("Graveyard", "-2")
     }
 
     suspend fun search(
@@ -57,13 +58,14 @@ object NerinyanApi {
         status: StatusOption
     ): List<NerinyanBeatmapSet> = withContext(Dispatchers.IO) {
         try {
-            val url = "$BASE_URL/search".toHttpUrl().newBuilder()
-                .addQueryParameter("q", query)
-                .addQueryParameter("p", page.toString())
-                .addQueryParameter("ps", pageSize.toString())
-                .addQueryParameter("sort", sort.param)
-                .addQueryParameter("s", status.param)
-                .addQueryParameter("m", "all")
+            val url = "$BASE_URL/v2/search".toHttpUrl().newBuilder()
+                .apply {
+                    if (query.isNotBlank()) addQueryParameter("q", query)
+                    addQueryParameter("amount", pageSize.toString())
+                    addQueryParameter("offset", (page * pageSize).toString())
+                    if (sort.param.isNotBlank()) addQueryParameter("sort", sort.param)
+                    if (status.param.isNotBlank()) addQueryParameter("status", status.param)
+                }
                 .build()
 
             val request = Request.Builder()
@@ -90,24 +92,51 @@ object NerinyanApi {
         }
     }
 
-    fun backgroundImageUrl(beatmapsetId: Long): String = "$BASE_URL/bg/$beatmapsetId"
+    fun backgroundImageUrl(beatmapsetId: Long): String =
+        "$BASE_URL/media/background/set/$beatmapsetId"
 
     /**
      * Downloads a beatmap archive. If [resumeFromBytes] is set and the file already
      * has that many bytes on disk, an HTTP `Range` request is issued so the download
      * continues where it left off. Servers that ignore `Range` simply restart the file.
+     *
+     * osu.direct intermittently rejects requests for maps it actually has, so failed
+     * attempts are retried with a short delay.
      */
     suspend fun downloadBeatmapset(
         beatmapsetId: Long,
         destination: File,
         onProgress: (Int?) -> Unit,
-        resumeFromBytes: Long = 0L
+        resumeFromBytes: Long = 0L,
+        noVideo: Boolean = true
     ): Boolean = withContext(Dispatchers.IO) {
+        var resume = resumeFromBytes
+        repeat(3) { attempt ->
+            val success = try {
+                downloadBeatmapsetOnce(beatmapsetId, destination, onProgress, resume, noVideo)
+            } catch (e: Exception) {
+                Logger.error(TAG, "Download attempt ${attempt + 1} failed for beatmapset $beatmapsetId", e)
+                false
+            }
+            if (success) return@withContext true
+            resume = destination.length()
+            if (attempt < 2) delay(1500L * (attempt + 1))
+        }
+        false
+    }
+
+    private suspend fun downloadBeatmapsetOnce(
+        beatmapsetId: Long,
+        destination: File,
+        onProgress: (Int?) -> Unit,
+        resumeFromBytes: Long,
+        noVideo: Boolean
+    ): Boolean {
         try {
             val url = "$BASE_URL/d/$beatmapsetId".toHttpUrl().newBuilder()
-                .addQueryParameter("nh", "true")
-                .addQueryParameter("nsb", "true")
-                .addQueryParameter("nv", "true")
+                .apply {
+                    if (noVideo) addQueryParameter("noVideo", "true")
+                }
                 .build()
 
             val requestBuilder = Request.Builder()
@@ -119,12 +148,12 @@ object NerinyanApi {
             }
 
             downloadClient.newCall(requestBuilder.build()).execute().use { response ->
-                if (response.code == 416) return@withContext true // already complete
+                if (response.code == 416) return true // already complete
                 if (!response.isSuccessful && response.code != 206) {
                     Logger.warn(TAG, "Download failed with code ${response.code}")
-                    return@withContext false
+                    return false
                 }
-                val body = response.body ?: return@withContext false
+                val body = response.body ?: return false
                 val isResumed = response.code == 206
                 val baseBytes = if (isResumed) resumeFromBytes else 0L
                 val totalBytes: Long? = when {
@@ -162,7 +191,6 @@ object NerinyanApi {
         }
     }
 
-    /** Parses the total size from a `Content-Range` header like `bytes 1000-1999/5000`. */
     private fun parseTotalBytes(contentRange: String?): Long? {
         if (contentRange == null) return null
         val slash = contentRange.lastIndexOf('/')
