@@ -48,6 +48,9 @@ class DownloadManager(
     private val _queuedIds = MutableStateFlow<Set<Long>>(emptySet())
     val queuedIds: StateFlow<Set<Long>> = _queuedIds.asStateFlow()
 
+    /** Whether new downloads request the no-video archive variant from osu.direct. */
+    var noVideo: Boolean = true
+
     init {
         createChannel()
         repeat(WORKER_COUNT) { startWorker() }
@@ -119,7 +122,8 @@ class DownloadManager(
                         indeterminate = pct == null
                     )
                 },
-                resumeFromBytes = existingBytes
+                resumeFromBytes = existingBytes,
+                noVideo = noVideo
             )
 
             if (success) {
