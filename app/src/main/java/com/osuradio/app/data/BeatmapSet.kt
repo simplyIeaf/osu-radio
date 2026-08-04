@@ -12,7 +12,15 @@ data class NerinyanBeatmapSet(
     val ranked_date: String? = null,
     val video: Boolean = false,
     val storyboard: Boolean = false,
+    val covers: BeatmapCovers? = null,
     val beatmaps: List<NerinyanBeatmap> = emptyList()
+)
+
+data class BeatmapCovers(
+    val cover: String? = null,
+    val card: String? = null,
+    val list: String? = null,
+    val slimcover: String? = null
 )
 
 data class NerinyanBeatmap(
