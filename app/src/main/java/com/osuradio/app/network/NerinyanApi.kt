@@ -132,7 +132,7 @@ object NerinyanApi {
         resumeFromBytes: Long,
         noVideo: Boolean
     ): Boolean {
-        try {
+        return try {
             val url = "$BASE_URL/d/$beatmapsetId".toHttpUrl().newBuilder()
                 .apply {
                     if (noVideo) addQueryParameter("noVideo", "true")
@@ -148,12 +148,12 @@ object NerinyanApi {
             }
 
             downloadClient.newCall(requestBuilder.build()).execute().use { response ->
-                if (response.code == 416) return true // already complete
+                if (response.code == 416) return@use true // already complete
                 if (!response.isSuccessful && response.code != 206) {
                     Logger.warn(TAG, "Download failed with code ${response.code}")
-                    return false
+                    return@use false
                 }
-                val body = response.body ?: return false
+                val body = response.body ?: return@use false
                 val isResumed = response.code == 206
                 val baseBytes = if (isResumed) resumeFromBytes else 0L
                 val totalBytes: Long? = when {
@@ -191,6 +191,7 @@ object NerinyanApi {
         }
     }
 
+    /** Parses the total size from a `Content-Range` header like `bytes 1000-1999/5000`. */
     private fun parseTotalBytes(contentRange: String?): Long? {
         if (contentRange == null) return null
         val slash = contentRange.lastIndexOf('/')
