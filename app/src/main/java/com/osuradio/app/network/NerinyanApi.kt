@@ -128,7 +128,7 @@ object NerinyanApi {
                 val isResumed = response.code == 206
                 val baseBytes = if (isResumed) resumeFromBytes else 0L
                 val totalBytes: Long? = when {
-                    isResumed -> parseTotalBytes(body.contentRange())
+                    isResumed -> parseTotalBytes(response.header("Content-Range"))
                         ?: body.contentLength().takeIf { it > 0 }?.let { baseBytes + it }
                     else -> body.contentLength()
                 }
