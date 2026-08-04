@@ -119,7 +119,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _downloadLoading  = MutableStateFlow(false)
     val downloadLoading: StateFlow<Boolean> = _downloadLoading.asStateFlow()
 
-    val activeDownloads: StateFlow<List<DownloadTask>> = downloadManager.activeDownloads
+    val downloadTasks: StateFlow<List<DownloadTask>> = downloadManager.downloads
     val queuedDownloadIds: StateFlow<Set<Long>> = downloadManager.queuedIds
 
     private var downloadPage       = 0
@@ -412,6 +412,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun downloadBeatmapset(set: NerinyanBeatmapSet) = downloadManager.enqueue(set)
 
+    fun pauseDownload(beatmapsetId: Long) = downloadManager.pause(beatmapsetId)
+
+    fun resumeDownload(beatmapsetId: Long) = downloadManager.resume(beatmapsetId)
+
+    fun cancelDownload(beatmapsetId: Long) = downloadManager.cancel(beatmapsetId)
+
     // ── Position updater ──────────────────────────────────────────────────────
 
     private fun startPositionUpdater() {
@@ -427,10 +433,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // ── Playback ──────────────────────────────────────────────────────────────
 
-    fun playSong(song: Song) {
+    fun playSong(song: Song, source: List<Song>? = null) {
         val service = musicService ?: run { _currentSong.value = song; return }
-        val idx = _queue.value.indexOfFirst { it.id == song.id }
+        val songs = source ?: _queue.value
+        val idx = songs.indexOfFirst { it.id == song.id }
         if (idx < 0) return
+        if (songs !== _queue.value) setQueueAndPush(songs)
         _currentSong.value = song
         _isPlaying.value   = true
         service.setTransition(_settings.value.audioTransition)
