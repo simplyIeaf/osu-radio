@@ -28,10 +28,12 @@ import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaLibraryService.LibraryParams
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.media3.session.MediaSession
+import androidx.media3.session.DefaultMediaNotificationProvider
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.osuradio.app.MainActivity
+import com.osuradio.app.R
 import com.osuradio.app.data.AudioTransition
 import com.osuradio.app.data.EqualizerSettings
 import com.osuradio.app.data.ModSettings
@@ -81,6 +83,7 @@ class MusicService : MediaLibraryService() {
     companion object {
         private const val ROOT_ID  = "root"
         private const val SONGS_ID = "songs"
+        private const val NOTIFICATION_CHANNEL_ID = "osu_radio_playback"
     }
 
     inner class LocalBinder : Binder() {
@@ -264,6 +267,17 @@ class MusicService : MediaLibraryService() {
             mediaLibrarySession = MediaLibrarySession.Builder(this, player, LibraryCallback())
                 .setSessionActivity(sessionActivityPendingIntent)
                 .build()
+
+            // MediaStyle playback notification (previous / play-pause / next).
+            // Title, artist and cover art come from the MediaItem metadata, which the
+            // System UI (API 33+) and the default provider (API < 33) both read.
+            setMediaNotificationProvider(
+                DefaultMediaNotificationProvider.Builder(this)
+                    .setChannelId(NOTIFICATION_CHANNEL_ID)
+                    .setChannelName(R.string.channel_name)
+                    .build()
+                    .also { it.setSmallIcon(R.drawable.ic_radio) }
+            )
 
             // Register headphone receivers
             registerReceiver(noisyReceiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
@@ -484,6 +498,7 @@ fun Song.toMediaItem(): MediaItem = MediaItem.Builder()
         MediaMetadata.Builder()
             .setTitle(title)
             .setArtist(artist)
+            .setArtworkUri(imagePath?.let { Uri.fromFile(File(it)) })
             .setIsBrowsable(false)
             .setIsPlayable(true)
             .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
