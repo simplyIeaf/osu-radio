@@ -59,7 +59,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun SongsScreen(
     viewModel: MainViewModel,
-    onSongClick: (Song) -> Unit
+    onSongClick: (Song, List<Song>) -> Unit
 ) {
     val context = LocalContext.current
     val currentSong = viewModel.currentSong.collectAsState()
@@ -181,7 +181,7 @@ fun SongsScreen(
                             SongSlot(
                                 song = song,
                                 isPlaying = currentSong.value?.id == song.id && isPlaying.value,
-                                onSlotClick = { onSongClick(song) },
+                                onSlotClick = { onSongClick(song, displayedSongs) },
                                 onImageClick = { /* no-op */ },
                                 onMoreClick = {
                                     menuAnchorSong = song
@@ -206,7 +206,7 @@ fun SongsScreen(
                                             )
                                         },
                                         onClick = {
-                                            onSongClick(song)
+                                            onSongClick(song, displayedSongs)
                                             showSongMenu = false
                                         }
                                     )
