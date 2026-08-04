@@ -113,6 +113,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _downloadStatusOption = MutableStateFlow(NerinyanApi.StatusOption.ALL)
     val downloadStatusOption: StateFlow<NerinyanApi.StatusOption> = _downloadStatusOption.asStateFlow()
 
+    private val _downloadNoVideo = MutableStateFlow(true)
+    val downloadNoVideo: StateFlow<Boolean> = _downloadNoVideo.asStateFlow()
+
     private val _downloadResults  = MutableStateFlow<List<NerinyanBeatmapSet>>(emptyList())
     val downloadResults: StateFlow<List<NerinyanBeatmapSet>> = _downloadResults.asStateFlow()
 
@@ -378,6 +381,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setDownloadStatusOption(option: NerinyanApi.StatusOption) {
         _downloadStatusOption.value = option; refreshDownloadSearch()
+    }
+
+    fun setDownloadNoVideo(noVideo: Boolean) {
+        _downloadNoVideo.value = noVideo
+        downloadManager.noVideo = noVideo
     }
 
     fun refreshDownloadSearch() {
