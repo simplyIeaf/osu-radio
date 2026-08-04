@@ -63,6 +63,7 @@ fun DownloadScreen(viewModel: MainViewModel) {
     val searchQuery = viewModel.downloadSearchQuery.collectAsState()
     val sortOption = viewModel.downloadSortOption.collectAsState()
     val statusOption = viewModel.downloadStatusOption.collectAsState()
+    val noVideo = viewModel.downloadNoVideo.collectAsState()
     val results = viewModel.downloadResults.collectAsState()
     val loading = viewModel.downloadLoading.collectAsState()
     val downloadTasks = viewModel.downloadTasks.collectAsState()
@@ -184,8 +185,10 @@ fun DownloadScreen(viewModel: MainViewModel) {
             DownloadSortPanel(
                 sortOption = sortOption.value,
                 statusOption = statusOption.value,
+                noVideo = noVideo.value,
                 onSortChanged = { viewModel.setDownloadSortOption(it) },
-                onStatusChanged = { viewModel.setDownloadStatusOption(it) }
+                onStatusChanged = { viewModel.setDownloadStatusOption(it) },
+                onNoVideoChanged = { viewModel.setDownloadNoVideo(it) }
             )
         }
     }
@@ -225,7 +228,7 @@ private fun BeatmapSetCard(
                     .align(Alignment.Center)
             )
             AsyncImage(
-                model = "https://assets.ppy.sh/beatmaps/${set.id}/covers/list@2x.jpg",
+                model = set.covers?.list ?: "https://assets.ppy.sh/beatmaps/${set.id}/covers/list@2x.jpg",
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
@@ -252,7 +255,7 @@ private fun BeatmapSetCard(
             )
             Text(
                 text = when (status) {
-                    null -> "${set.status} • ${set.beatmaps.size} difficulties"
+                    null -> "${set.status.capitalized()} • ${set.beatmaps.size} difficulties"
                     DownloadStatus.QUEUED -> "Queued..."
                     DownloadStatus.DOWNLOADING -> "Downloading ${
                         task?.progress?.takeIf { it > 0 }?.let { "$it%" } ?: ""
@@ -365,3 +368,5 @@ private fun DownloadCardActions(
         )
     }
 }
+
+private fun String.capitalized(): String = replaceFirstChar { it.uppercase() }
