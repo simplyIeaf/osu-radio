@@ -16,15 +16,20 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -47,6 +52,8 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.osuradio.app.data.NerinyanBeatmapSet
 import com.osuradio.app.ui.components.DownloadSortPanel
+import com.osuradio.app.utils.DownloadStatus
+import com.osuradio.app.utils.DownloadTask
 import com.osuradio.app.viewmodel.MainViewModel
 import java.util.concurrent.TimeUnit
 
@@ -58,7 +65,7 @@ fun DownloadScreen(viewModel: MainViewModel) {
     val statusOption = viewModel.downloadStatusOption.collectAsState()
     val results = viewModel.downloadResults.collectAsState()
     val loading = viewModel.downloadLoading.collectAsState()
-    val queuedIds = viewModel.queuedDownloadIds.collectAsState()
+    val downloadTasks = viewModel.downloadTasks.collectAsState()
 
     var showSortSheet by remember { mutableStateOf(false) }
     val sortSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -145,8 +152,11 @@ fun DownloadScreen(viewModel: MainViewModel) {
                 itemsIndexed(results.value, key = { _, set -> set.id }) { _, set ->
                     BeatmapSetCard(
                         set = set,
-                        isQueued = queuedIds.value.contains(set.id),
-                        onDownload = { viewModel.downloadBeatmapset(set) }
+                        task = downloadTasks.value.find { it.beatmapsetId == set.id },
+                        onDownload = { viewModel.downloadBeatmapset(set) },
+                        onPause = { viewModel.pauseDownload(set.id) },
+                        onResume = { viewModel.resumeDownload(set.id) },
+                        onCancel = { viewModel.cancelDownload(set.id) }
                     )
                 }
                 if (loading.value) {
@@ -184,9 +194,13 @@ fun DownloadScreen(viewModel: MainViewModel) {
 @Composable
 private fun BeatmapSetCard(
     set: NerinyanBeatmapSet,
-    isQueued: Boolean,
-    onDownload: () -> Unit
+    task: DownloadTask?,
+    onDownload: () -> Unit,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onCancel: () -> Unit
 ) {
+    val status = task?.status
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -237,25 +251,117 @@ private fun BeatmapSetCard(
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = "${set.status} • ${set.beatmaps.size} difficulties",
+                text = when (status) {
+                    null -> "${set.status} • ${set.beatmaps.size} difficulties"
+                    DownloadStatus.QUEUED -> "Queued..."
+                    DownloadStatus.DOWNLOADING -> "Downloading ${
+                        task?.progress?.takeIf { it > 0 }?.let { "$it%" } ?: ""
+                    }".trim()
+                    DownloadStatus.PAUSED -> "Paused"
+                    DownloadStatus.FAILED -> "Download failed"
+                    DownloadStatus.COMPLETED -> "Imported to library"
+                },
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (status == DownloadStatus.FAILED)
+                    MaterialTheme.colorScheme.error
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-        }
-        if (isQueued) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(24.dp),
-                strokeWidth = 2.dp,
-                color = MaterialTheme.colorScheme.primary
-            )
-        } else {
-            IconButton(onClick = onDownload) {
-                Icon(
-                    Icons.Filled.Download,
-                    contentDescription = "Download",
-                    tint = MaterialTheme.colorScheme.primary
+            if (status == DownloadStatus.DOWNLOADING) {
+                LinearProgressIndicator(
+                    progress = { (task?.progress ?: 0).coerceIn(0, 100) / 100f },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp)
                 )
             }
         }
+        DownloadCardActions(
+            status = status,
+            onDownload = onDownload,
+            onPause = onPause,
+            onResume = onResume,
+            onCancel = onCancel
+        )
+    }
+}
+
+@Composable
+private fun DownloadCardActions(
+    status: DownloadStatus?,
+    onDownload: () -> Unit,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onCancel: () -> Unit
+) {
+    when (status) {
+        null -> IconButton(onClick = onDownload) {
+            Icon(
+                Icons.Filled.Download,
+                contentDescription = "Download",
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+        DownloadStatus.QUEUED -> IconButton(onClick = onCancel) {
+            Icon(
+                Icons.Filled.Close,
+                contentDescription = "Cancel",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        DownloadStatus.DOWNLOADING -> Row {
+            IconButton(onClick = onPause) {
+                Icon(
+                    Icons.Filled.Pause,
+                    contentDescription = "Pause",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(onClick = onCancel) {
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = "Cancel",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        DownloadStatus.PAUSED -> Row {
+            IconButton(onClick = onResume) {
+                Icon(
+                    Icons.Filled.PlayArrow,
+                    contentDescription = "Resume",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            IconButton(onClick = onCancel) {
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = "Remove",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        DownloadStatus.FAILED -> Row {
+            IconButton(onClick = onResume) {
+                Icon(
+                    Icons.Filled.Refresh,
+                    contentDescription = "Retry",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            IconButton(onClick = onCancel) {
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = "Dismiss",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        DownloadStatus.COMPLETED -> Icon(
+            Icons.Filled.CheckCircle,
+            contentDescription = "Imported",
+            tint = MaterialTheme.colorScheme.primary
+        )
     }
 }
