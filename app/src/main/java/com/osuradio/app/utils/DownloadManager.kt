@@ -157,7 +157,7 @@ class DownloadManager(
         refreshQueuedIds()
     }
 
-    private fun updateStatus(beatmapsetId: Long, status: DownloadStatus, progress: Int) {
+    private fun updateStatus(beatmapsetId: Long, status: DownloadStatus, progress: Int = 0) {
         _downloads.value = _downloads.value.map { task ->
             if (task.beatmapsetId == beatmapsetId) task.copy(status = status, progress = progress)
             else task
