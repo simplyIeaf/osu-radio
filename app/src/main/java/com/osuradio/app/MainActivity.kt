@@ -348,8 +348,8 @@ fun MainApp(
                         when (tab) {
                             0 -> SongsScreen(
                                 viewModel = viewModel,
-                                onSongClick = { song ->
-                                    viewModel.playSong(song)
+                                onSongClick = { song, source ->
+                                    viewModel.playSong(song, source)
                                     showPlayer = true
                                 }
                             )
