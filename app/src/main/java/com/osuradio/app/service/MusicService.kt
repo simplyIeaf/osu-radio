@@ -1,15 +1,20 @@
 package com.osuradio.app.service
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ServiceInfo
 import android.media.AudioManager
 import android.media.audiofx.Equalizer
 import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import android.os.Binder
+import android.os.Build
 import android.os.IBinder
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
@@ -31,6 +36,7 @@ import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.osuradio.app.MainActivity
+import com.osuradio.app.R
 import com.osuradio.app.data.AudioTransition
 import com.osuradio.app.data.EqualizerSettings
 import com.osuradio.app.data.ModSettings
@@ -75,6 +81,8 @@ class MusicService : MediaLibraryService() {
     companion object {
         private const val ROOT_ID  = "root"
         private const val SONGS_ID = "songs"
+        private const val FOREGROUND_NOTIFICATION_ID = 1002
+        private const val FOREGROUND_CHANNEL_ID = "osu_radio_foreground"
     }
 
     inner class LocalBinder : Binder() {
@@ -113,6 +121,10 @@ class MusicService : MediaLibraryService() {
     // ── Player listener ───────────────────────────────────────────────────────
 
     private val playerListener = object : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (isPlaying) startForegroundQuietly()
+        }
+
         /**
          * Audio session ID changes after the audio renderer is initialized.
          * Create / recreate audio effects here to bind them to the correct session.
@@ -247,6 +259,7 @@ class MusicService : MediaLibraryService() {
                 .build()
 
             // Register headphone receivers
+            createForegroundChannel()
             registerReceiver(noisyReceiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
             @Suppress("UnspecifiedRegisterReceiverFlag")
             registerReceiver(headsetReceiver, IntentFilter(Intent.ACTION_HEADSET_PLUG))
@@ -272,6 +285,43 @@ class MusicService : MediaLibraryService() {
         mediaLibrarySession
 
     override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
+    }
+
+    private fun startForegroundQuietly() {
+        try {
+            val notification = Notification.Builder(this, FOREGROUND_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_transparent)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setVisibility(Notification.VISIBILITY_SECRET)
+                .setCategory(Notification.CATEGORY_SERVICE)
+                .setShowWhen(false)
+                .build()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    FOREGROUND_NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                )
+            } else {
+                startForeground(FOREGROUND_NOTIFICATION_ID, notification)
+            }
+        } catch (e: Exception) {
+            Logger.error(TAG, "Failed to start foreground service", e)
+        }
+    }
+
+    private fun createForegroundChannel() {
+        val channel = NotificationChannel(
+            FOREGROUND_CHANNEL_ID,
+            getString(R.string.channel_name),
+            NotificationManager.IMPORTANCE_MIN
+        ).apply {
+            description = getString(R.string.channel_description)
+            setShowBadge(false)
+        }
+        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            .createNotificationChannel(channel)
     }
 
     fun getPlayer(): ExoPlayer = player
@@ -484,11 +534,13 @@ class MusicService : MediaLibraryService() {
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        val p = mediaLibrarySession?.player
-        if (p == null || !p.playWhenReady || p.mediaItemCount == 0) stopSelf()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        mediaLibrarySession?.player?.pause()
+        stopSelf()
     }
 
     override fun onDestroy() {
+        stopForeground(STOP_FOREGROUND_REMOVE)
         try { unregisterReceiver(noisyReceiver) } catch (_: Exception) {}
         try { unregisterReceiver(headsetReceiver) } catch (_: Exception) {}
         equalizer?.release()
