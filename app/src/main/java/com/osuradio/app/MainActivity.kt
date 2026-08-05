@@ -175,6 +175,7 @@ fun MainApp(
     activity: ComponentActivity
 ) {
     val isLoading = viewModel.isLoading.collectAsState()
+    val loadingMessage = viewModel.loadingMessage.collectAsState()
     val currentSong = viewModel.currentSong.collectAsState()
     val isPlaying = viewModel.isPlaying.collectAsState()
     val currentPositionMs = viewModel.currentPositionMs.collectAsState()
@@ -243,7 +244,7 @@ fun MainApp(
     }
 
     if (isLoading.value) {
-        LoadingScreen()
+        LoadingScreen(message = loadingMessage.value)
         return
     }
 
