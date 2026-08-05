@@ -17,7 +17,8 @@ object UpdateChecker {
 
     data class ReleaseInfo(
         val tagName: String,
-        val apkDownloadUrl: String
+        val apkDownloadUrl: String,
+        val body: String = ""
     )
 
     suspend fun fetchLatestRelease(): ReleaseInfo? = withContext(Dispatchers.IO) {
@@ -44,9 +45,39 @@ object UpdateChecker {
                 }
             }
             if (apkUrl.isEmpty()) return@withContext null
-            ReleaseInfo(tagName = tag, apkDownloadUrl = apkUrl)
+            ReleaseInfo(
+                tagName = tag,
+                apkDownloadUrl = apkUrl,
+                body = json.optString("body").trim()
+            )
         } catch (e: Exception) {
             Logger.error("UpdateChecker", "Failed to fetch release", e)
+            null
+        } finally {
+            conn?.disconnect()
+        }
+    }
+
+    /**
+     *fetches the release notes (description) for a specific version tag,
+     * e.g. `v1.4.0`. returns null when the release can't be found or the
+     * network request fails, so callers can fall back to a generic message.
+     */
+    suspend fun fetchReleaseNotes(version: String): String? = withContext(Dispatchers.IO) {
+        var conn: HttpURLConnection? = null
+        try {
+            val tag = version.removePrefix("v")
+            val url = URL("https://api.github.com/repos/simplyIeaf/osu-radio/releases/tags/v$tag")
+            conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.setRequestProperty("Accept", "application/vnd.github+json")
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            if (conn.responseCode != 200) return@withContext null
+            val body = conn.inputStream.bufferedReader().use { it.readText() }
+            JSONObject(body).optString("body").trim().ifEmpty { null }
+        } catch (e: Exception) {
+            Logger.error("UpdateChecker", "Failed to fetch release notes for v$version", e)
             null
         } finally {
             conn?.disconnect()
