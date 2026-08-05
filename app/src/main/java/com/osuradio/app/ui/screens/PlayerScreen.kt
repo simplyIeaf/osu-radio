@@ -96,6 +96,7 @@ fun PlayerScreen(
     var showMods by remember { mutableStateOf(false) }
     var showSleepTimer by remember { mutableStateOf(false) }
     var showQueue by remember { mutableStateOf(false) }
+    var showRemaining by remember { mutableStateOf(false) }
     val modsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val queueSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scrollState = rememberScrollState()
@@ -276,9 +277,16 @@ fun PlayerScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = formatMs(song.duration),
+                    text = if (showRemaining) {
+                        "-${formatMs((song.duration - currentPositionMs.value).coerceAtLeast(0L))}"
+                    } else {
+                        formatMs(song.duration)
+                    },
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .clickable { showRemaining = !showRemaining }
+                        .padding(4.dp)
                 )
             }
 

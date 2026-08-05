@@ -50,5 +50,8 @@ data class AppSettings(
     val syncWithOsuDroid: Boolean = false,
     val equalizerSettings: EqualizerSettings = EqualizerSettings(),
     val loudnessNormalization: Boolean = false,
-    val loudnessGainDb: Int = 3
+    val loudnessGainDb: Int = 3,
+    val showAsRaster: Boolean = false,
+    val keepScreenOnWhilePlaying: Boolean = false,
+    val lastTab: Int = 0
 )

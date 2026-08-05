@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
@@ -186,7 +187,7 @@ fun MainApp(
     val updateFailed = viewModel.updateFailed.collectAsState()
 
     var showPlayer by remember { mutableStateOf(false) }
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by remember { mutableIntStateOf(viewModel.settings.value.lastTab) }
     var selectedPlaylist by remember { mutableStateOf<Playlist?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -233,6 +234,19 @@ fun MainApp(
             }
             viewModel.dismissUpdateFailed()
         }
+    }
+
+    LaunchedEffect(isPlaying.value, settings.value.keepScreenOnWhilePlaying) {
+        val keepScreenOn = isPlaying.value && settings.value.keepScreenOnWhilePlaying
+        if (keepScreenOn) {
+            activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    LaunchedEffect(isLoading.value) {
+        if (!isLoading.value) selectedTab = viewModel.settings.value.lastTab
     }
 
     androidx.activity.compose.BackHandler(enabled = showPlayer) {
@@ -317,7 +331,10 @@ fun MainApp(
                             tabs.forEachIndexed { index, tab ->
                                 NavigationBarItem(
                                     selected = selectedTab == index,
-                                    onClick = { selectedTab = index },
+                                    onClick = {
+                                        selectedTab = index
+                                        viewModel.setLastTab(index)
+                                    },
                                     icon = { Icon(tab.icon, contentDescription = tab.label) },
                                     label = { Text(tab.label, style = MaterialTheme.typography.labelSmall) },
                                     colors = NavigationBarItemDefaults.colors(

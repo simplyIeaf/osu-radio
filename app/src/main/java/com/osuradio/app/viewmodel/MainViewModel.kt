@@ -136,10 +136,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var serviceBound = false
     private var positionUpdaterJob: Job? = null
 
+    private var restoreSongId: String? = null
+    private var restorePositionMs = 0L
+
+    private val playbackPrefs: android.content.SharedPreferences
+        get() = getApplication<Application>().getSharedPreferences(
+            "osu_radio_playback", Context.MODE_PRIVATE
+        )
+
     // ── Player listener attached directly to ExoPlayer ────────────────────────
     private val playbackListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _isPlaying.value = isPlaying
+            if (!isPlaying) persistPlaybackState()
         }
         override fun onPlaybackStateChanged(state: Int) {
             if (state == Player.STATE_ENDED) {
@@ -150,7 +159,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             if (mediaItem != null) {
                 val song = _queue.value.find { it.id == mediaItem.mediaId }
-                if (song != null) _currentSong.value = song
+                if (song != null) {
+                    _currentSong.value = song
+                    persistSongId(song.id)
+                }
             }
         }
     }
@@ -186,6 +198,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             service.getPlayer().addListener(playbackListener)
             pushQueueToPlayer()
             startPositionUpdater()
+            applyRestorePosition()
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -196,6 +209,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     override fun onCleared() {
+        persistPlaybackState()
         musicService?.getPlayer()?.removeListener(playbackListener)
         positionUpdaterJob?.cancel()
         sleepTimerJob?.cancel()
@@ -232,6 +246,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun setQueueAndPush(songs: List<Song>) {
         _queue.value = songs
         pushQueueToPlayer()
+    }
+
+    private fun persistSongId(id: String) {
+        try {
+            playbackPrefs.edit()
+                .putString("last_song_id", id)
+                .putLong("last_position_ms", 0L)
+                .apply()
+        } catch (e: Exception) {
+            Logger.error(TAG, "Failed to persist song id", e)
+        }
+    }
+
+    private fun persistPlaybackState() {
+        val song = _currentSong.value ?: return
+        try {
+            playbackPrefs.edit()
+                .putString("last_song_id", song.id)
+                .putLong("last_position_ms", _currentPositionMs.value)
+                .apply()
+        } catch (e: Exception) {
+            Logger.error(TAG, "Failed to persist playback state", e)
+        }
+    }
+
+    private fun applyRestorePosition() {
+        val service = musicService ?: return
+        val id = restoreSongId ?: return
+        if (_currentSong.value?.id != id) return
+        val ms = restorePositionMs
+        if (ms <= 0L) return
+        service.seekTo(ms)
+        _currentPositionMs.value = ms
+        restoreSongId = null
+        restorePositionMs = 0L
     }
 
     /**
@@ -288,6 +337,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 withContext(Dispatchers.Main) {
                     _songs.value = allSongs
                     setQueueAndPush(allSongs)
+                    val lastId = playbackPrefs.getString("last_song_id", null)
+                    if (lastId != null) {
+                        val lastSong = allSongs.find { it.id == lastId }
+                        if (lastSong != null) {
+                            restoreSongId = lastId
+                            restorePositionMs = playbackPrefs.getLong("last_position_ms", 0L)
+                            _currentSong.value = lastSong
+                        }
+                    }
+                    applyRestorePosition()
                     _isLoading.value = false
                     checkAppUpdated(context)
                 }
@@ -312,7 +371,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val allSongs = allSongsMap.values.toList().sortedBy { it.artist }
                 withContext(Dispatchers.Main) {
                     _songs.value = allSongs
-                    setQueueAndPush(allSongs)
+                    if (_queue.value.isEmpty()) setQueueAndPush(allSongs)
                 }
             } catch (e: Exception) {
                 Logger.error(TAG, "Sync failed", e)
@@ -486,10 +545,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun startPositionUpdater() {
         positionUpdaterJob?.cancel()
         positionUpdaterJob = viewModelScope.launch {
+            var tick = 0
             while (true) {
                 val player = musicService?.getPlayer()
                 if (player != null) _currentPositionMs.value = player.currentPosition
-                kotlinx.coroutines.delay(500)
+                tick++
+                if (tick % 10 == 0 && _isPlaying.value) persistPlaybackState()
+                delay(500)
             }
         }
     }
@@ -590,6 +652,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setSearchQuery(query: String) { _searchQuery.value = query }
 
+    fun setLastTab(index: Int) {
+        if (_settings.value.lastTab == index) return
+        _settings.value = _settings.value.copy(lastTab = index)
+        ConfigManager.saveSettings(_settings.value)
+    }
+
     fun getFilteredSongs(): List<Song> {
         val q = _searchQuery.value.lowercase()
         return if (q.isBlank()) _songs.value
@@ -673,7 +741,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun mergeSong(song: Song) {
         if (_songs.value.none { it.id == song.id }) {
             _songs.value = (_songs.value + song).sortedBy { it.artist }
-            setQueueAndPush(_songs.value)
+            if (_queue.value.isEmpty()) setQueueAndPush(_songs.value)
         }
     }
 }

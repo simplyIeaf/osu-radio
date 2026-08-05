@@ -59,6 +59,7 @@ class MusicService : MediaLibraryService() {
     private val scope = CoroutineScope(Dispatchers.Main + Job())
     private var transitionJob: Job? = null
     private var modRampJob: Job? = null
+    private var volumeFadeJob: Job? = null
     private var currentTransition: AudioTransition = AudioTransition.FADE_IN_OUT
     private val binder = LocalBinder()
     private lateinit var sessionActivityPendingIntent: PendingIntent
@@ -393,8 +394,8 @@ class MusicService : MediaLibraryService() {
         player.play()
     }
 
-    fun pauseResume() { if (player.isPlaying) player.pause() else player.play() }
-    fun pause()       { player.pause() }
+    fun pauseResume() { if (player.isPlaying) fadeOutPause() else fadeInPlay() }
+    fun pause() { fadeOutPause() }
     fun seekTo(ms: Long) { player.seekTo(ms) }
 
     fun setShuffleMode(enabled: Boolean) { player.shuffleModeEnabled = enabled }
@@ -540,8 +541,37 @@ class MusicService : MediaLibraryService() {
 
     fun setTransition(transition: AudioTransition) { currentTransition = transition }
 
+    private fun fadeOutPause() {
+        transitionJob?.cancel()
+        volumeFadeJob?.cancel()
+        if (currentTransition == AudioTransition.NONE) { player.pause(); return }
+        volumeFadeJob = scope.launch {
+            val start = player.volume.coerceIn(0f, 1f)
+            repeat(12) { i ->
+                player.volume = start * (1f - (i + 1) / 12f)
+                delay(20)
+            }
+            player.pause()
+        }
+    }
+
+    private fun fadeInPlay() {
+        transitionJob?.cancel()
+        volumeFadeJob?.cancel()
+        player.play()
+        if (currentTransition == AudioTransition.NONE) { player.volume = 1f; return }
+        volumeFadeJob = scope.launch {
+            val start = player.volume.coerceIn(0f, 1f)
+            repeat(12) { i ->
+                player.volume = start + (1f - start) * ((i + 1) / 12f)
+                delay(20)
+            }
+        }
+    }
+
     private fun applyTransitionStart() {
         transitionJob?.cancel()
+        volumeFadeJob?.cancel()
         when (currentTransition) {
             AudioTransition.FADE_IN_OUT, AudioTransition.CROSSFADE -> {
                 player.volume = 0f
@@ -575,6 +605,7 @@ class MusicService : MediaLibraryService() {
         loudnessEnhancer?.release()
         transitionJob?.cancel()
         modRampJob?.cancel()
+        volumeFadeJob?.cancel()
         scope.cancel()
         mediaLibrarySession?.run { player.release(); release(); mediaLibrarySession = null }
         super.onDestroy()
