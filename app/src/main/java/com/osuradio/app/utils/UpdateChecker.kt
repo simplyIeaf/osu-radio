@@ -60,7 +60,6 @@ object UpdateChecker {
 
     /**
      *fetches the release notes (description) for a specific version tag,
-     * e.g. `v1.4.0`. returns null when the release can't be found or the
      * network request fails, so callers can fall back to a generic message.
      */
     suspend fun fetchReleaseNotes(version: String): String? = withContext(Dispatchers.IO) {

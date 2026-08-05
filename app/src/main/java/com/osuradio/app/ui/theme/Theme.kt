@@ -22,6 +22,10 @@ fun getColorScheme(
     onSurface = Color(colors.onSurface ?: TextPrimary.toArgb().toLong()),
     surfaceVariant = Color(colors.surfaceVariant ?: DarkCard.toArgb().toLong()),
     onSurfaceVariant = Color(colors.onSurfaceVariant ?: TextSecondary.toArgb().toLong()),
+    surfaceContainer = Color(colors.surfaceVariant ?: DarkCard.toArgb().toLong()),
+    surfaceContainerLow = Color(colors.surfaceVariant ?: DarkCard.toArgb().toLong()),
+    surfaceContainerHigh = Color(colors.surfaceVariant ?: DarkCard.toArgb().toLong()),
+    surfaceContainerHighest = Color(colors.surfaceVariant ?: DarkCard.toArgb().toLong()),
     tertiary = Color(colors.tertiary ?: OsuPinkDark.toArgb().toLong()),
     error = Color(0xFFCF6679)
 )

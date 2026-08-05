@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
@@ -72,6 +73,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -377,7 +379,7 @@ private fun AudioSettingsTab(viewModel: MainViewModel) {
                         Text(
                             text  = "+${settings.value.loudnessGainDb} dB",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = Color.White,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -396,7 +398,8 @@ private fun AudioSettingsTab(viewModel: MainViewModel) {
 
 @Composable
 private fun SynchronizationSettingsTab(viewModel: MainViewModel) {
-    val settings = viewModel.settings.collectAsState()
+    val context = LocalContext.current
+    val isSyncing = viewModel.isSyncing.collectAsState()
 
     LazyColumn(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
@@ -404,30 +407,20 @@ private fun SynchronizationSettingsTab(viewModel: MainViewModel) {
     ) {
         item {
             SettingsCard(title = "Synchronization") {
-                SettingsToggle(
-                    title    = "osu!droid",
-                    subtitle = "Sync songs from osu!droid on app start",
-                    checked  = settings.value.syncWithOsuDroid,
-                    onChange = { viewModel.updateSettings(settings.value.copy(syncWithOsuDroid = it)) }
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Top
+                Button(
+                    onClick = { viewModel.syncSongs(context) },
+                    enabled = !isSyncing.value,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Sync,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(top = 2.dp)
+                        modifier = Modifier.padding(end = 8.dp)
                     )
                     Text(
-                        text = "When enabled, osu!radio copies songs that are missing from " +
-                            "osu!droid's Songs folder into your library every time the app starts. " +
-                            "Turn it off to only keep the songs you have downloaded or imported.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 8.dp)
+                        text = if (isSyncing.value) "Syncing..." else "Sync songs from osu!droid",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
@@ -566,7 +559,11 @@ private fun SettingsDropdown(
             trailingIcon  = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier      = Modifier.fillMaxWidth().menuAnchor()
         )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ) {
             options.forEach { option ->
                 DropdownMenuItem(
                     text    = { Text(option, style = MaterialTheme.typography.bodyMedium) },

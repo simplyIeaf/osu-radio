@@ -286,7 +286,8 @@ private fun PlaylistCard(
                 }
                 DropdownMenu(
                     expanded = showMenu,
-                    onDismissRequest = { showMenu = false }
+                    onDismissRequest = { showMenu = false },
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
                 ) {
                     DropdownMenuItem(
                         text = { Text("Rename") },

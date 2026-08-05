@@ -5,8 +5,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -16,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowRight
@@ -23,21 +26,24 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -47,14 +53,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.osuradio.app.data.Song
 import com.osuradio.app.ui.components.ScreenHeader
 import com.osuradio.app.ui.components.SongSlot
 import com.osuradio.app.viewmodel.MainViewModel
-import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,12 +68,10 @@ fun SongsScreen(
     viewModel: MainViewModel,
     onSongClick: (Song, List<Song>) -> Unit
 ) {
-    val context = LocalContext.current
     val currentSong = viewModel.currentSong.collectAsState()
     val isPlaying = viewModel.isPlaying.collectAsState()
     val playlists = viewModel.playlists.collectAsState()
     val searchQuery = viewModel.searchQuery.collectAsState()
-    val isSyncing = viewModel.isSyncing.collectAsState()
     val songs = viewModel.songs.collectAsState()
     val listState = rememberLazyListState()
 
@@ -77,17 +81,12 @@ fun SongsScreen(
     // Whether the Playlist accordion is expanded inside the dropdown
     var playlistSectionExpanded by remember { mutableStateOf(false) }
 
+    var showFiltersMenu by remember { mutableStateOf(false) }
+    var sortOption by remember { mutableStateOf("A-Z") }
+    val filtersSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
     // Delete confirmation
     var deleteConfirmSong by remember { mutableStateOf<Song?>(null) }
-
-    // Sync debounce: grey out for 5 seconds after press
-    var syncCooldown by remember { mutableStateOf(false) }
-    LaunchedEffect(syncCooldown) {
-        if (syncCooldown) {
-            delay(5_000L)
-            syncCooldown = false
-        }
-    }
 
     // Reset accordion whenever the menu closes
     LaunchedEffect(showSongMenu) {
@@ -110,7 +109,7 @@ fun SongsScreen(
             }
         )
 
-        // Search + Sync row
+        // Search + Sort/filter row
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -145,22 +144,11 @@ fun SongsScreen(
                 },
                 singleLine = true
             )
-            // Sync button — greys out for 5 s after press
-            IconButton(
-                onClick = {
-                    if (!syncCooldown && !isSyncing.value) {
-                        syncCooldown = true
-                        viewModel.syncSongs(context)
-                    }
-                },
-                enabled = !syncCooldown && !isSyncing.value
-            ) {
+            IconButton(onClick = { showFiltersMenu = true }) {
                 Icon(
-                    imageVector = Icons.Filled.Sync,
-                    contentDescription = "Sync songs",
-                    tint = if (syncCooldown || isSyncing.value)
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                    else MaterialTheme.colorScheme.primary
+                    imageVector = Icons.Filled.FilterList,
+                    contentDescription = "Sort and filter songs",
+                    tint = Color.White
                 )
             }
         }
@@ -208,7 +196,8 @@ fun SongsScreen(
                             if (showSongMenu && menuAnchorSong?.id == song.id) {
                                 DropdownMenu(
                                     expanded = true,
-                                    onDismissRequest = { showSongMenu = false }
+                                    onDismissRequest = { showSongMenu = false },
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant
                                 ) {
                                     // ── Play ──────────────────────────────────────
                                     DropdownMenuItem(
@@ -330,6 +319,53 @@ fun SongsScreen(
                     }
                 }
             }
+        }
+    }
+
+    if (showFiltersMenu) {
+        var filtersExpanded by remember { mutableStateOf(false) }
+        ModalBottomSheet(
+            onDismissRequest = { showFiltersMenu = false },
+            sheetState = filtersSheetState,
+            containerColor = MaterialTheme.colorScheme.surface
+        ) {
+            Text(
+                text = "Sort by",
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp)
+            )
+            ExposedDropdownMenuBox(
+                expanded = filtersExpanded,
+                onExpandedChange = { filtersExpanded = !filtersExpanded }
+            ) {
+                OutlinedTextField(
+                    value = sortOption,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Sort") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = filtersExpanded) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .menuAnchor()
+                )
+                ExposedDropdownMenu(
+                    expanded = filtersExpanded,
+                    onDismissRequest = { filtersExpanded = false },
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("A-Z", style = MaterialTheme.typography.bodyMedium) },
+                        onClick = {
+                            sortOption = "A-Z"
+                            filtersExpanded = false
+                        }
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 

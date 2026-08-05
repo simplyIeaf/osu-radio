@@ -71,7 +71,8 @@ fun ModsPanel(
             )
             ExposedDropdownMenu(
                 expanded = expanded,
-                onDismissRequest = { expanded = false }
+                onDismissRequest = { expanded = false },
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
             ) {
                 SongMod.entries.forEach { mod ->
                     DropdownMenuItem(

@@ -46,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -101,7 +102,7 @@ fun DownloadScreen(viewModel: MainViewModel) {
                     "$activeDownloads downloading • $queuedDownloads queued"
                 activeDownloads > 0 -> "$activeDownloads downloading"
                 queuedDownloads > 0 -> "$queuedDownloads queued"
-                else -> "Search and download beatmaps from beatmap mirror"
+                else -> "Search and download beatmaps from osu!droid"
             }
         )
 
@@ -314,7 +315,7 @@ private fun DownloadCardActions(
             Icon(
                 Icons.Filled.Download,
                 contentDescription = "Download",
-                tint = MaterialTheme.colorScheme.primary
+                tint = Color.White
             )
         }
         DownloadStatus.QUEUED -> IconButton(onClick = onCancel) {

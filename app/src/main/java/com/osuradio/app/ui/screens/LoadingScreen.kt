@@ -28,10 +28,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.osuradio.app.BuildConfig
 import com.osuradio.app.R
 
@@ -79,7 +77,6 @@ fun LoadingScreen(message: String = "Loading...") {
             modifier = Modifier.padding(32.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
-                // Pink circular frame that the logo fills
                 Box(
                     modifier = Modifier
                         .size(112.dp)
@@ -95,7 +92,6 @@ fun LoadingScreen(message: String = "Loading...") {
                     contentDescription = "osu!radio logo",
                     modifier = Modifier.size(104.dp)
                 )
-                // Rotating dashed ring around the frame
                 Canvas(modifier = Modifier.size(144.dp)) {
                     val stroke = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
                     drawArc(
@@ -107,22 +103,14 @@ fun LoadingScreen(message: String = "Loading...") {
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(36.dp))
-            Text(
-                text = "Loading",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 26.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(28.dp))
             Text(
                 text = message,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = "v${BuildConfig.APP_VERSION}",
                 style = MaterialTheme.typography.labelMedium,

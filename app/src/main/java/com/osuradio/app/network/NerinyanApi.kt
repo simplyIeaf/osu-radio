@@ -95,6 +95,14 @@ object NerinyanApi {
     fun backgroundImageUrl(beatmapsetId: Long): String =
         "$BASE_URL/media/background/set/$beatmapsetId"
 
+    /**
+     * Downloads a beatmap archive. If [resumeFromBytes] is set and the file already
+     * has that many bytes on disk, an HTTP `Range` request is issued so the download
+     * continues where it left off. Servers that ignore `Range` simply restart the file.
+     *
+     * osu.direct intermittently rejects requests for maps it actually has, so failed
+     * attempts are retried with a short delay.
+     */
     suspend fun downloadBeatmapset(
         beatmapsetId: Long,
         destination: File,
