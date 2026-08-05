@@ -46,8 +46,6 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.tabIndicatorOffset
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -128,7 +126,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
             selectedTabIndex = selectedTab,
             containerColor = MaterialTheme.colorScheme.background,
             contentColor = Color.White,
-            indicator = { tabPositions ->
+            indicator = {
                 TabRowDefaults.SecondaryIndicator(
                     modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
                     color = MaterialTheme.colorScheme.primary
@@ -439,7 +437,8 @@ private fun SynchronizationSettingsTab(viewModel: MainViewModel) {
                     )
                     Text(
                         text = "When enabled, osu!radio copies songs that are missing from " +
-                            "osu!droid's songs folder into your library every time the app starts",
+                            "osu!droid's Songs folder into your library every time the app starts. " +
+                            "Turn it off to only keep the songs you have downloaded or imported.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = 8.dp)
@@ -592,6 +591,7 @@ private fun SettingsDropdown(
     }
 }
 
+/** Row of color swatches used to customize the theme. A highlighted border marks the active color. */
 @Composable
 private fun ColorPickerRow(
     label: String,
