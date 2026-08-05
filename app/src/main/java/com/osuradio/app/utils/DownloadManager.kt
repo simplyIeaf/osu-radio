@@ -133,7 +133,20 @@ class DownloadManager(
                 if (song != null) {
                     updateStatus(beatmapsetId, DownloadStatus.COMPLETED, 100)
                     refreshQueuedIds()
-                    onSongImported(song)
+                    try {
+                        onSongImported(song)
+                    } catch (e: Exception) {
+                        Logger.error(TAG, "Failed to register imported song $beatmapsetId", e)
+                    }
+                    scope.launch {
+                        delay(2_500L)
+                        removeTask(beatmapsetId)
+                    }
+                } else if (isAlreadyImported(task.artist, task.title)) {
+                    // The import reported failure but the beatmap already exists in the
+                    // library (e.g. a duplicate import), so there's nothing to fix.
+                    updateStatus(beatmapsetId, DownloadStatus.COMPLETED, 100)
+                    refreshQueuedIds()
                     scope.launch {
                         delay(2_500L)
                         removeTask(beatmapsetId)
@@ -143,8 +156,17 @@ class DownloadManager(
                 }
             } else {
                 // Keep the partial file so the user can retry or resume later.
-                updateStatus(beatmapsetId, DownloadStatus.FAILED)
-                notificationManager.cancel(notificationId)
+                if (isAlreadyImported(task.artist, task.title)) {
+                    updateStatus(beatmapsetId, DownloadStatus.COMPLETED, 100)
+                    refreshQueuedIds()
+                    scope.launch {
+                        delay(2_500L)
+                        removeTask(beatmapsetId)
+                    }
+                } else {
+                    updateStatus(beatmapsetId, DownloadStatus.FAILED)
+                    notificationManager.cancel(notificationId)
+                }
             }
         } catch (e: CancellationException) {
             // Paused or cancelled — status already updated by the caller.
@@ -177,6 +199,17 @@ class DownloadManager(
 
     private fun tempFileFor(beatmapsetId: Long) = File(context.cacheDir, "download_$beatmapsetId.osz")
     private fun notificationIdFor(beatmapsetId: Long) = NOTIFICATION_ID_BASE + (beatmapsetId % 100000).toInt()
+
+    /** Whether a folder for this artist/title already exists in the library with an audio file. */
+    private fun isAlreadyImported(artist: String, title: String): Boolean {
+        val baseName = OszImporter.sanitizeFolderName("$artist - $title")
+        val folder = File(SongScanner.getOsuRadioDir(), "Songs/$baseName")
+        if (!folder.isDirectory) return false
+        return folder.listFiles()?.any {
+            val ext = it.extension.lowercase()
+            ext == "mp3" || ext == "ogg"
+        } == true
+    }
 
     private fun showProgressNotification(
         notificationId: Int,
