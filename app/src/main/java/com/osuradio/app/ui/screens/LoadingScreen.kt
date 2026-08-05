@@ -17,16 +17,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.painterResource
@@ -37,20 +35,11 @@ import com.osuradio.app.BuildConfig
 import com.osuradio.app.R
 
 @Composable
-fun LoadingScreen(message: String) {
+fun LoadingScreen() {
     val primary = MaterialTheme.colorScheme.primary
     val secondary = MaterialTheme.colorScheme.secondary
 
     val infiniteTransition = rememberInfiniteTransition(label = "loading")
-    val pulse by infiniteTransition.animateFloat(
-        initialValue = 0.9f,
-        targetValue = 1.1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse"
-    )
     val rotation by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
@@ -89,17 +78,22 @@ fun LoadingScreen(message: String) {
             modifier = Modifier.padding(32.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
-                // Soft pulsing glow behind the logo
+                // Pink circular frame that the logo fills
                 Box(
                     modifier = Modifier
-                        .size(120.dp)
+                        .size(112.dp)
                         .background(
                             color = primary.copy(alpha = glowAlpha),
-                            shape = androidx.compose.foundation.shape.CircleShape
+                            shape = CircleShape
                         )
                 )
-                // Rotating dashed ring
-                Canvas(modifier = Modifier.size(120.dp)) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_app_logo),
+                    contentDescription = "osu!radio logo",
+                    modifier = Modifier.size(104.dp)
+                )
+                // Rotating dashed ring around the frame
+                Canvas(modifier = Modifier.size(144.dp)) {
                     val stroke = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
                     drawArc(
                         color = primary,
@@ -109,39 +103,20 @@ fun LoadingScreen(message: String) {
                         style = stroke
                     )
                 }
-                Image(
-                    painter = painterResource(id = R.drawable.ic_app_logo),
-                    contentDescription = "osu!radio logo",
-                    modifier = Modifier
-                        .size(52.dp)
-                        .scale(pulse)
-                )
             }
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(36.dp))
             Text(
-                text = "osu!radio",
-                style = MaterialTheme.typography.headlineLarge,
+                text = "Loading",
+                style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 36.sp
+                fontWeight = FontWeight.Bold,
+                fontSize = 32.sp
             )
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-            LinearProgressIndicator(
-                modifier = Modifier.size(width = 160.dp, height = 4.dp),
-                color = primary,
-                trackColor = primary.copy(alpha = 0.15f)
-            )
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "v${BuildConfig.APP_VERSION}",
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
