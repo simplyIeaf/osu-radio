@@ -1,6 +1,17 @@
 package com.osuradio.app.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -9,7 +20,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Equalizer
@@ -31,7 +44,10 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.tabIndicatorOffset
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -41,6 +57,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -51,16 +69,48 @@ import com.osuradio.app.data.AnimationStyle
 import com.osuradio.app.data.AudioTransition
 import com.osuradio.app.data.EqualizerSettings
 import com.osuradio.app.data.EqPreset
+import com.osuradio.app.data.ThemeColors
+import com.osuradio.app.ui.components.ScreenHeader
 import com.osuradio.app.viewmodel.MainViewModel
 
 private val EQ_BAND_LABELS = listOf("Sub\n60Hz", "Bass\n230Hz", "Mid\n910Hz", "Hi\n3.6kHz", "Air\n14kHz")
 
 private data class SettingsTabSpec(val label: String, val icon: ImageVector)
 
+private val ACCENT_COLORS = listOf(
+    "Pink" to 0xFFFF66AA,
+    "Purple" to 0xFF9B59B6,
+    "Blue" to 0xFF3498DB,
+    "Cyan" to 0xFF00BCD4,
+    "Teal" to 0xFF26A69A,
+    "Green" to 0xFF66BB6A,
+    "Amber" to 0xFFFFC107,
+    "Orange" to 0xFFFF9800,
+    "Red" to 0xFFEF5350
+)
+
+private val BACKGROUND_COLORS = listOf(
+    "Dark" to 0xFF121212,
+    "Charcoal" to 0xFF101418,
+    "Purple" to 0xFF1A0A2E,
+    "Blue" to 0xFF0A1628,
+    "Green" to 0xFF0A1E12,
+    "Brown" to 0xFF1E1410
+)
+
+private val SURFACE_COLORS = listOf(
+    "Default" to 0xFF1E1E1E,
+    "Card" to 0xFF2A2A2A,
+    "Indigo" to 0xFF1A1A2E,
+    "Slate" to 0xFF232B36
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(viewModel: MainViewModel) {
     var selectedTab by remember { mutableIntStateOf(0) }
+    val settings = viewModel.settings.collectAsState()
+    val animationStyle = settings.value.animationStyle
 
     val tabs = listOf(
         SettingsTabSpec("General", Icons.Filled.Settings),
@@ -70,7 +120,21 @@ fun SettingsScreen(viewModel: MainViewModel) {
     )
 
     Column(modifier = Modifier.fillMaxSize()) {
-        PrimaryTabRow(selectedTabIndex = selectedTab) {
+        ScreenHeader(
+            title = "Settings",
+            subtitle = "Customize your experience"
+        )
+        PrimaryTabRow(
+            selectedTabIndex = selectedTab,
+            containerColor = MaterialTheme.colorScheme.background,
+            contentColor = Color.White,
+            indicator = { tabPositions ->
+                TabRowDefaults.SecondaryIndicator(
+                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        ) {
             tabs.forEachIndexed { index, tab ->
                 Tab(
                     selected = selectedTab == index,
@@ -87,11 +151,44 @@ fun SettingsScreen(viewModel: MainViewModel) {
                 )
             }
         }
-        when (selectedTab) {
-            0 -> GeneralSettingsTab(viewModel)
-            1 -> AudioSettingsTab(viewModel)
-            2 -> SynchronizationSettingsTab(viewModel)
-            3 -> AboutTab()
+        Box(modifier = Modifier.weight(1f)) {
+            AnimatedContent(
+                targetState = selectedTab,
+                transitionSpec = {
+                    when (animationStyle) {
+                        AnimationStyle.SLIDE -> {
+                            if (targetState > initialState) {
+                                slideInHorizontally(
+                                    initialOffsetX = { it },
+                                    animationSpec = tween(300)
+                                ) togetherWith slideOutHorizontally(
+                                    targetOffsetX = { -it },
+                                    animationSpec = tween(300)
+                                )
+                            } else {
+                                slideInHorizontally(
+                                    initialOffsetX = { -it },
+                                    animationSpec = tween(300)
+                                ) togetherWith slideOutHorizontally(
+                                    targetOffsetX = { it },
+                                    animationSpec = tween(300)
+                                )
+                            }
+                        }
+                        AnimationStyle.FADE -> fadeIn(tween(250)) togetherWith fadeOut(tween(250))
+                        AnimationStyle.SCALE -> fadeIn(tween(250)) togetherWith fadeOut(tween(250))
+                        AnimationStyle.NONE -> fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                    }
+                },
+                label = "settings_tabs"
+            ) { tab ->
+                when (tab) {
+                    0 -> GeneralSettingsTab(viewModel)
+                    1 -> AudioSettingsTab(viewModel)
+                    2 -> SynchronizationSettingsTab(viewModel)
+                    3 -> AboutTab()
+                }
+            }
         }
     }
 }
@@ -105,12 +202,6 @@ private fun GeneralSettingsTab(viewModel: MainViewModel) {
         AnimationStyle.FADE  to "Fade",
         AnimationStyle.SCALE to "Scale",
         AnimationStyle.NONE  to "None"
-    )
-    val transitionLabels = mapOf(
-        AudioTransition.NONE        to "None",
-        AudioTransition.FADE_IN_OUT to "Fade In/Out",
-        AudioTransition.CROSSFADE   to "Crossfade",
-        AudioTransition.SWOOSH      to "Swoosh"
     )
 
     LazyColumn(
@@ -131,7 +222,84 @@ private fun GeneralSettingsTab(viewModel: MainViewModel) {
                         )
                     }
                 )
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(4.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                SettingsToggle(
+                    title    = "Automatically check for updates",
+                    subtitle = "Checks on app start (takes effect after restart)",
+                    checked  = settings.value.autoCheckUpdates,
+                    onChange = { viewModel.updateSettings(settings.value.copy(autoCheckUpdates = it)) }
+                )
+            }
+        }
+        item {
+            SettingsCard(title = "Themes") {
+                val colors = settings.value.themeColors
+                val update = { newColors: ThemeColors ->
+                    viewModel.updateSettings(settings.value.copy(themeColors = newColors))
+                }
+                ColorPickerRow(
+                    label    = "Accent",
+                    current  = colors.primary,
+                    colors   = ACCENT_COLORS,
+                    onSelect = { color -> update(colors.copy(primary = color)) },
+                    onReset  = { update(colors.copy(primary = null)) }
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                ColorPickerRow(
+                    label    = "Accent Light",
+                    current  = colors.secondary,
+                    colors   = ACCENT_COLORS,
+                    onSelect = { color -> update(colors.copy(secondary = color)) },
+                    onReset  = { update(colors.copy(secondary = null)) }
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                ColorPickerRow(
+                    label    = "Background",
+                    current  = colors.background,
+                    colors   = BACKGROUND_COLORS,
+                    onSelect = { color -> update(colors.copy(background = color)) },
+                    onReset  = { update(colors.copy(background = null)) }
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                ColorPickerRow(
+                    label    = "Surface",
+                    current  = colors.surface,
+                    colors   = SURFACE_COLORS,
+                    onSelect = { color -> update(colors.copy(surface = color)) },
+                    onReset  = { update(colors.copy(surface = null)) }
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                ColorPickerRow(
+                    label    = "Cards",
+                    current  = colors.surfaceVariant,
+                    colors   = SURFACE_COLORS,
+                    onSelect = { color -> update(colors.copy(surfaceVariant = color)) },
+                    onReset  = { update(colors.copy(surfaceVariant = null)) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AudioSettingsTab(viewModel: MainViewModel) {
+    val settings = viewModel.settings.collectAsState()
+    val eq = settings.value.equalizerSettings ?: EqualizerSettings()
+
+    val transitionLabels = mapOf(
+        AudioTransition.NONE        to "None",
+        AudioTransition.FADE_IN_OUT to "Fade In/Out",
+        AudioTransition.CROSSFADE   to "Crossfade",
+        AudioTransition.SWOOSH      to "Swoosh"
+    )
+
+    LazyColumn(
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            SettingsCard(title = "Audio") {
                 SettingsDropdown(
                     label    = "Audio Transitions",
                     selected = transitionLabels[settings.value.audioTransition] ?: "Fade In/Out",
@@ -146,28 +314,7 @@ private fun GeneralSettingsTab(viewModel: MainViewModel) {
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-                SettingsToggle(
-                    title    = "Automatically check for updates",
-                    subtitle = "Checks on app start (takes effect after restart)",
-                    checked  = settings.value.autoCheckUpdates,
-                    onChange = { viewModel.updateSettings(settings.value.copy(autoCheckUpdates = it)) }
-                )
-            }
-        }
-    }
-}
 
-@Composable
-private fun AudioSettingsTab(viewModel: MainViewModel) {
-    val settings = viewModel.settings.collectAsState()
-    val eq = settings.value.equalizerSettings ?: EqualizerSettings()
-
-    LazyColumn(
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item {
-            SettingsCard(title = "Audio") {
                 SettingsToggle(
                     title    = "Equalizer",
                     subtitle = "Apply per-band gain to audio output",
@@ -292,8 +439,7 @@ private fun SynchronizationSettingsTab(viewModel: MainViewModel) {
                     )
                     Text(
                         text = "When enabled, osu!radio copies songs that are missing from " +
-                            "osu!droid's Songs folder into your library every time the app starts. " +
-                            "Turn it off to only keep the songs you have downloaded or imported.",
+                            "osu!droid's songs folder into your library every time the app starts",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = 8.dp)
@@ -440,6 +586,58 @@ private fun SettingsDropdown(
                 DropdownMenuItem(
                     text    = { Text(option, style = MaterialTheme.typography.bodyMedium) },
                     onClick = { expanded = false; onSelect(option) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ColorPickerRow(
+    label: String,
+    current: Long?,
+    colors: List<Pair<String, Long>>,
+    onSelect: (Long) -> Unit,
+    onReset: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onReset) {
+                Text(
+                    text = "Reset",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            colors.forEach { (_, color) ->
+                val selected = current == color
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .background(Color(color))
+                        .border(
+                            width = if (selected) 3.dp else 1.dp,
+                            color = if (selected)
+                                MaterialTheme.colorScheme.onSurface
+                            else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                            shape = CircleShape
+                        )
+                        .clickable { onSelect(color) }
                 )
             }
         }
