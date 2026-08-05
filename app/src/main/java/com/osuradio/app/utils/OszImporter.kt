@@ -144,11 +144,14 @@ object OszImporter {
     }
 
     fun importOszFromFile(file: File, fallbackName: String): Song? {
+        var outputFolder: File? = null
+        var outputFolderExisted = true
         return try {
             val osuRadioDir = SongScanner.getOsuRadioDir()
             val outputSongsDir = SongScanner.getOrCreateOutputSongsDir(osuRadioDir)
             val baseName = sanitizeFolderName(fallbackName.ifBlank { file.nameWithoutExtension })
-            val outputFolder = File(outputSongsDir, baseName)
+            outputFolder = File(outputSongsDir, baseName)
+            outputFolderExisted = outputFolder.exists()
             outputFolder.mkdirs()
 
             val audioFiles = mutableListOf<File>()
@@ -199,6 +202,8 @@ object OszImporter {
             )
         } catch (e: Exception) {
             Logger.error(TAG, "Failed to import downloaded beatmapset", e)
+            // Only clean up folders this import created — never delete a previously imported map.
+            if (!outputFolderExisted) outputFolder?.deleteRecursively()
             null
         }
     }
@@ -215,7 +220,7 @@ object OszImporter {
         }
     }
 
-    private fun sanitizeFolderName(name: String): String =
+    fun sanitizeFolderName(name: String): String =
         name.replace(Regex("[\\\\/:*?\"<>|]"), "_").take(120)
 
     private fun getFileName(context: Context, uri: Uri): String? {
