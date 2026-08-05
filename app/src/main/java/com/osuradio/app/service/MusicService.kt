@@ -373,6 +373,19 @@ class MusicService : MediaLibraryService() {
         }
     }
 
+    /**
+     * Replace the queue but keep playback on the song at [startIndex] with its
+     * elapsed position [positionMs]. Used when reshuffling so the current track
+     * keeps playing uninterrupted.
+     */
+    fun setQueuePreservingPosition(songs: List<Song>, startIndex: Int, positionMs: Long) {
+        allSongs = songs
+        player.setMediaItems(songs.map { it.toMediaItem() }, startIndex, positionMs)
+        if (player.playbackState == Player.STATE_IDLE) {
+            player.prepare()
+        }
+    }
+
     /** Seek to [index] in the current queue and begin playback. */
     fun playAtIndex(index: Int) {
         player.seekTo(index, 0L)
