@@ -51,6 +51,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.osuradio.app.data.Song
+import com.osuradio.app.ui.components.ScreenHeader
 import com.osuradio.app.ui.components.SongSlot
 import com.osuradio.app.viewmodel.MainViewModel
 import kotlinx.coroutines.delay
@@ -67,6 +68,7 @@ fun SongsScreen(
     val playlists = viewModel.playlists.collectAsState()
     val searchQuery = viewModel.searchQuery.collectAsState()
     val isSyncing = viewModel.isSyncing.collectAsState()
+    val songs = viewModel.songs.collectAsState()
     val listState = rememberLazyListState()
 
     // Song context menu state
@@ -95,6 +97,19 @@ fun SongsScreen(
     val displayedSongs = viewModel.getFilteredSongs()
 
     Column(modifier = Modifier.fillMaxSize()) {
+        ScreenHeader(
+            title = "Library",
+            subtitle = buildString {
+                append(songs.value.size)
+                append(if (songs.value.size == 1) " song" else " songs")
+                if (playlists.value.isNotEmpty()) {
+                    append(" • ")
+                    append(playlists.value.size)
+                    append(if (playlists.value.size == 1) " playlist" else " playlists")
+                }
+            }
+        )
+
         // Search + Sync row
         Row(
             modifier = Modifier
