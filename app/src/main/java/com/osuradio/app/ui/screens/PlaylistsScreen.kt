@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.osuradio.app.data.Playlist
 import com.osuradio.app.data.Song
+import com.osuradio.app.ui.components.ScreenHeader
 import com.osuradio.app.viewmodel.MainViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -75,6 +76,11 @@ fun PlaylistsScreen(
     else playlists.value.filter { it.name.lowercase().contains(playlistSearch.lowercase()) }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        ScreenHeader(
+            title = "Playlists",
+            subtitle = "${playlists.value.size} ${if (playlists.value.size == 1) "playlist" else "playlists"}"
+        )
+
         // Playlist search bar
         OutlinedTextField(
             value = playlistSearch,
