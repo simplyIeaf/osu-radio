@@ -71,9 +71,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLoading        = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    private val _loadingMessage   = MutableStateFlow("Initializing...")
-    val loadingMessage: StateFlow<String> = _loadingMessage.asStateFlow()
-
     private val _searchQuery      = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
@@ -119,9 +116,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _downloadStatusOption = MutableStateFlow(NerinyanApi.StatusOption.ALL)
     val downloadStatusOption: StateFlow<NerinyanApi.StatusOption> = _downloadStatusOption.asStateFlow()
 
-    private val _downloadNoVideo = MutableStateFlow(true)
-    val downloadNoVideo: StateFlow<Boolean> = _downloadNoVideo.asStateFlow()
-
     private val _downloadResults  = MutableStateFlow<List<NerinyanBeatmapSet>>(emptyList())
     val downloadResults: StateFlow<List<NerinyanBeatmapSet>> = _downloadResults.asStateFlow()
 
@@ -145,7 +139,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _isPlaying.value = isPlaying
         }
         override fun onPlaybackStateChanged(state: Int) {
-            if (state == Player.STATE_ENDED) _isPlaying.value = false
+            if (state == Player.STATE_ENDED) {
+                _isPlaying.value = false
+                handleQueueEnded()
+            }
         }
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             if (mediaItem != null) {
@@ -234,6 +231,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         pushQueueToPlayer()
     }
 
+    /**
+     * Playback reached the end of the queue while repeat is off.
+     * Never stop: reshuffle and continue (shuffle) or wrap around to the first
+     * track (normal), so the music keeps playing until the user pauses.
+     */
+    private fun handleQueueEnded() {
+        if (_settings.value.repeat != RepeatMode.NONE) return
+        val songs = _queue.value
+        val service = musicService ?: return
+        if (songs.isEmpty()) return
+        if (_settings.value.shuffle) {
+            setQueueAndPush(songs.shuffled())
+        }
+        _isPlaying.value = true
+        service.playAtIndex(0)
+    }
+
     // ── Initialisation ────────────────────────────────────────────────────────
 
     fun initialize(context: Context) {
@@ -247,16 +261,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 withContext(Dispatchers.Main) {
                     _settings.value = ConfigManager.getSettings()
                     _playlists.value = ConfigManager.getPlaylists()
-                    _loadingMessage.value = "Loading library..."
                 }
 
                 val existingSongs = SongScanner.loadAlreadyScannedSongs(context)
                 val newSongs: List<Song>
                 if (_settings.value.syncWithOsuDroid) {
-                    withContext(Dispatchers.Main) { _loadingMessage.value = "Scanning osu!droid..." }
-                    newSongs = SongScanner.scanAndCopySongs(context) { msg ->
-                        viewModelScope.launch(Dispatchers.Main) { _loadingMessage.value = msg }
-                    }
+                    newSongs = SongScanner.scanAndCopySongs(context) { }
                 } else {
                     newSongs = emptyList()
                 }
@@ -424,11 +434,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _downloadStatusOption.value = option; refreshDownloadSearch()
     }
 
-    fun setDownloadNoVideo(noVideo: Boolean) {
-        _downloadNoVideo.value = noVideo
-        downloadManager.noVideo = noVideo
-    }
-
     fun refreshDownloadSearch() {
         downloadPage = 0; downloadHasMore = true
         val query = _downloadSearchQuery.value
@@ -502,13 +507,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun skipToNext() {
-        musicService?.getPlayer()?.seekToNextMediaItem()
+        val player = musicService?.getPlayer() ?: return
+        val atLast = player.currentMediaItemIndex >= player.mediaItemCount - 1
+        if (atLast && _settings.value.repeat == RepeatMode.NONE && _queue.value.isNotEmpty()) {
+            // Never stop: reshuffle and continue (shuffle) or wrap to the first track.
+            if (_settings.value.shuffle) setQueueAndPush(_queue.value.shuffled())
+            _isPlaying.value = true
+            musicService?.playAtIndex(0)
+            return
+        }
+        player.seekToNextMediaItem()
     }
 
     fun skipToPrev() {
         val player = musicService?.getPlayer() ?: return
         if (player.currentPosition > 3_000L) player.seekTo(0L)
         else player.seekToPreviousMediaItem()
+    }
+
+    /** Play the song at [index] of the current queue. */
+    fun playQueueIndex(index: Int) {
+        val songs = _queue.value
+        if (index in songs.indices) playSong(songs[index], songs)
     }
 
     fun applyMod(mod: SongMod, customSpeed: Float = 1.0f) {
@@ -530,7 +550,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         service.applyLoudnessSettings(settings.loudnessNormalization, settings.loudnessGainDb)
     }
 
-    fun toggleShuffle() = updateSettings(_settings.value.copy(shuffle = !_settings.value.shuffle))
+    fun toggleShuffle() {
+        val newShuffle = !_settings.value.shuffle
+        if (newShuffle) {
+            // Shuffle the queue but keep the currently playing song first, so the
+            // transition is seamless instead of jumping to a random track.
+            val songs = _queue.value
+            if (songs.isNotEmpty()) {
+                val current = _currentSong.value
+                val rest = if (current == null) songs else songs.filter { it.id != current.id }
+                val reshuffled = (if (current == null) emptyList() else listOf(current)) + rest.shuffled()
+                val newIndex = reshuffled.indexOfFirst { it.id == current?.id }.coerceAtLeast(0)
+                _queue.value = reshuffled
+                musicService?.setQueuePreservingPosition(reshuffled, newIndex, _currentPositionMs.value)
+            }
+        }
+        updateSettings(_settings.value.copy(shuffle = newShuffle))
+    }
 
     fun toggleRepeat() {
         val next = when (_settings.value.repeat) {
