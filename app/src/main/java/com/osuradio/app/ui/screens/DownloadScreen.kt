@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.osuradio.app.data.NerinyanBeatmapSet
 import com.osuradio.app.ui.components.DownloadSortPanel
+import com.osuradio.app.ui.components.ScreenHeader
 import com.osuradio.app.utils.DownloadStatus
 import com.osuradio.app.utils.DownloadTask
 import com.osuradio.app.viewmodel.MainViewModel
@@ -92,6 +93,19 @@ fun DownloadScreen(viewModel: MainViewModel) {
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        val activeDownloads = downloadTasks.value.count { it.status == DownloadStatus.DOWNLOADING }
+        val queuedDownloads = downloadTasks.value.count { it.status == DownloadStatus.QUEUED }
+        ScreenHeader(
+            title = "Download",
+            subtitle = when {
+                activeDownloads > 0 && queuedDownloads > 0 ->
+                    "$activeDownloads downloading • $queuedDownloads queued"
+                activeDownloads > 0 -> "$activeDownloads downloading"
+                queuedDownloads > 0 -> "$queuedDownloads queued"
+                else -> "Search and download beatmaps from osu!droid"
+            }
+        )
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
