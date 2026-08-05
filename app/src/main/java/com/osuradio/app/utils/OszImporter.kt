@@ -1,6 +1,7 @@
 package com.osuradio.app.utils
 
 import android.content.Context
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import com.osuradio.app.data.Song
 import java.io.File
@@ -68,7 +69,7 @@ object OszImporter {
                 audioPath = audioFile.absolutePath,
                 imagePath = selectedImage?.absolutePath,
                 folderPath = outputFolder.absolutePath,
-                duration = 0L
+                duration = readAudioDuration(audioFile.absolutePath)
             )
         } catch (e: Exception) {
             Logger.error(TAG, "Failed to import .osz file", e)
@@ -132,7 +133,7 @@ object OszImporter {
                         audioPath = audioFile.absolutePath,
                         imagePath = imageFile?.absolutePath,
                         folderPath = File(outputSongsDir, folderName).absolutePath,
-                        duration = 0L
+                        duration = readAudioDuration(audioFile.absolutePath)
                     )
                 )
             }
@@ -194,11 +195,23 @@ object OszImporter {
                 audioPath = audioFile.absolutePath,
                 imagePath = selectedImage?.absolutePath,
                 folderPath = outputFolder.absolutePath,
-                duration = 0L
+                duration = readAudioDuration(audioFile.absolutePath)
             )
         } catch (e: Exception) {
             Logger.error(TAG, "Failed to import downloaded beatmapset", e)
             null
+        }
+    }
+
+    private fun readAudioDuration(audioPath: String): Long {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(audioPath)
+            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+        } catch (e: Exception) {
+            0L
+        } finally {
+            retriever.release()
         }
     }
 
