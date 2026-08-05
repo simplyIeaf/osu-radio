@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder
 import com.osuradio.app.data.AppSettings
 import com.osuradio.app.data.EqualizerSettings
 import com.osuradio.app.data.Playlist
+import com.osuradio.app.data.ThemeColors
 import java.io.File
 
 object ConfigManager {
@@ -30,10 +31,10 @@ object ConfigManager {
             if (file.exists()) {
                 val json = file.readText()
                 val loaded = gson.fromJson(json, Config::class.java) ?: Config()
-                // Null-safety for fields added after initial release
                 currentConfig = loaded.copy(
                     settings = loaded.settings.copy(
-                        equalizerSettings = loaded.settings.equalizerSettings ?: EqualizerSettings()
+                        equalizerSettings = loaded.settings.equalizerSettings ?: EqualizerSettings(),
+                        themeColors = loaded.settings.themeColors ?: ThemeColors()
                     )
                 )
             }
