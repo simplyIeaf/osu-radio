@@ -64,7 +64,6 @@ fun DownloadScreen(viewModel: MainViewModel) {
     val searchQuery = viewModel.downloadSearchQuery.collectAsState()
     val sortOption = viewModel.downloadSortOption.collectAsState()
     val statusOption = viewModel.downloadStatusOption.collectAsState()
-    val noVideo = viewModel.downloadNoVideo.collectAsState()
     val results = viewModel.downloadResults.collectAsState()
     val loading = viewModel.downloadLoading.collectAsState()
     val downloadTasks = viewModel.downloadTasks.collectAsState()
@@ -102,7 +101,7 @@ fun DownloadScreen(viewModel: MainViewModel) {
                     "$activeDownloads downloading • $queuedDownloads queued"
                 activeDownloads > 0 -> "$activeDownloads downloading"
                 queuedDownloads > 0 -> "$queuedDownloads queued"
-                else -> "Search and download beatmaps from osu!droid"
+                else -> "Search and download beatmaps from beatmap mirror"
             }
         )
 
@@ -199,10 +198,8 @@ fun DownloadScreen(viewModel: MainViewModel) {
             DownloadSortPanel(
                 sortOption = sortOption.value,
                 statusOption = statusOption.value,
-                noVideo = noVideo.value,
                 onSortChanged = { viewModel.setDownloadSortOption(it) },
-                onStatusChanged = { viewModel.setDownloadStatusOption(it) },
-                onNoVideoChanged = { viewModel.setDownloadNoVideo(it) }
+                onStatusChanged = { viewModel.setDownloadStatusOption(it) }
             )
         }
     }
