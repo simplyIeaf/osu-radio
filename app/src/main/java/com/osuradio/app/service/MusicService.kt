@@ -10,7 +10,6 @@ import android.media.audiofx.Equalizer
 import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import android.os.Binder
-import android.os.Bundle
 import android.os.IBinder
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
@@ -23,20 +22,15 @@ import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.session.CommandButton
-import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaLibraryService.LibraryParams
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.media3.session.MediaSession
-import androidx.media3.session.SessionCommand
-import androidx.media3.session.SessionResult
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.osuradio.app.MainActivity
-import com.osuradio.app.R
 import com.osuradio.app.data.AudioTransition
 import com.osuradio.app.data.EqualizerSettings
 import com.osuradio.app.data.ModSettings
@@ -77,20 +71,10 @@ class MusicService : MediaLibraryService() {
     // ── Songs catalogue for Android Auto browsing ──────────────────────────────
     var allSongs: List<Song> = emptyList()
 
-    // ── Callbacks wired by ViewModel ───────────────────────────────────────────
-    /** Fires on every automatic media-item transition (auto-advance, shuffle). */
-    var onSongChanged: ((Song?) -> Unit)? = null
-    /** Fires on every isPlaying change. */
-    var onIsPlayingChanged: ((Boolean) -> Unit)? = null
-    /** Fires when the media-session loop button changes the player's repeat mode. */
-    var onRepeatModeChanged: ((Int) -> Unit)? = null
-
     // ── Android Auto library IDs ───────────────────────────────────────────────
     companion object {
         private const val ROOT_ID  = "root"
         private const val SONGS_ID = "songs"
-        private const val NOTIFICATION_CHANNEL_ID = "osu_radio_playback"
-        private const val ACTION_TOGGLE_REPEAT = "com.osuradio.app.action.TOGGLE_REPEAT"
     }
 
     inner class LocalBinder : Binder() {
@@ -129,19 +113,6 @@ class MusicService : MediaLibraryService() {
     // ── Player listener ───────────────────────────────────────────────────────
 
     private val playerListener = object : Player.Listener {
-        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO ||
-                reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK
-            ) {
-                val song = allSongs.find { it.id == mediaItem?.mediaId }
-                onSongChanged?.invoke(song)
-            }
-        }
-
-        override fun onIsPlayingChanged(isPlaying: Boolean) {
-            onIsPlayingChanged?.invoke(isPlaying)
-        }
-
         /**
          * Audio session ID changes after the audio renderer is initialized.
          * Create / recreate audio effects here to bind them to the correct session.
@@ -164,46 +135,6 @@ class MusicService : MediaLibraryService() {
                     .setIsPlayable(false)
                     .build()
             ).build()
-
-        @OptIn(UnstableApi::class)
-        override fun onConnect(
-            session: MediaSession,
-            controller: MediaSession.ControllerInfo
-        ): MediaSession.ConnectionResult {
-            if (session.isMediaNotificationController(controller)) {
-                // Make the toggle-repeat command available to the media notification so the
-                // Loop button in mediaButtonPreferences stays enabled.
-                return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
-                    .setAvailableSessionCommands(
-                        MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
-                            .buildUpon()
-                            .add(SessionCommand(ACTION_TOGGLE_REPEAT, Bundle()))
-                            .build()
-                    )
-                    .build()
-            }
-            return MediaSession.ConnectionResult.AcceptedResultBuilder(session).build()
-        }
-
-        @OptIn(UnstableApi::class)
-        override fun onCustomCommand(
-            session: MediaSession,
-            controller: MediaSession.ControllerInfo,
-            customCommand: SessionCommand,
-            args: Bundle
-        ): ListenableFuture<SessionResult> {
-            if (customCommand.customAction == ACTION_TOGGLE_REPEAT) {
-                player.repeatMode = when (player.repeatMode) {
-                    Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
-                    Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
-                    else -> Player.REPEAT_MODE_OFF
-                }
-                updateRepeatNotificationButton()
-                onRepeatModeChanged?.invoke(player.repeatMode)
-                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
-            }
-            return super.onCustomCommand(session, controller, customCommand, args)
-        }
 
         override fun onGetLibraryRoot(
             session: MediaLibrarySession,
@@ -313,24 +244,7 @@ class MusicService : MediaLibraryService() {
 
             mediaLibrarySession = MediaLibrarySession.Builder(this, player, LibraryCallback())
                 .setSessionActivity(sessionActivityPendingIntent)
-                // Media notification buttons: previous / play-pause / next are added by
-                // DefaultMediaNotificationProvider from the player's available commands, so we
-                // only provide the custom Loop button that gets appended as a fourth action.
-                .setMediaButtonPreferences(
-                    listOf(repeatCommandButton(player.repeatMode))
-                )
                 .build()
-
-            // MediaStyle playback notification (previous / play-pause / next).
-            // Title, artist and cover art come from the MediaItem metadata, which the
-            // System UI (API 33+) and the default provider (API < 33) both read.
-            setMediaNotificationProvider(
-                DefaultMediaNotificationProvider.Builder(this)
-                    .setChannelId(NOTIFICATION_CHANNEL_ID)
-                    .setChannelName(R.string.channel_name)
-                    .build()
-                    .also { it.setSmallIcon(R.drawable.ic_radio) }
-            )
 
             // Register headphone receivers
             registerReceiver(noisyReceiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
@@ -356,6 +270,9 @@ class MusicService : MediaLibraryService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? =
         mediaLibrarySession
+
+    override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
+    }
 
     fun getPlayer(): ExoPlayer = player
 
@@ -406,33 +323,6 @@ class MusicService : MediaLibraryService() {
             RepeatMode.ALL  -> Player.REPEAT_MODE_ALL
             RepeatMode.ONE  -> Player.REPEAT_MODE_ONE
         }
-        updateRepeatNotificationButton()
-    }
-
-    // ── Media notification Loop button ────────────────────────────────────────
-
-    /** Icon reflects the current repeat mode; the command toggles it in onCustomCommand. */
-    @OptIn(UnstableApi::class)
-    private fun repeatCommandButton(repeatMode: Int): CommandButton =
-        CommandButton.Builder(
-            when (repeatMode) {
-                Player.REPEAT_MODE_ONE -> CommandButton.ICON_REPEAT_ONE
-                Player.REPEAT_MODE_ALL -> CommandButton.ICON_REPEAT_ALL
-                else -> CommandButton.ICON_REPEAT_OFF
-            }
-        )
-            .setSessionCommand(SessionCommand(ACTION_TOGGLE_REPEAT, Bundle()))
-            .setDisplayName("Loop")
-            .setEnabled(true)
-            .build()
-
-    /** Refreshes the Loop button in the media notification so its icon matches the state. */
-    @OptIn(UnstableApi::class)
-    private fun updateRepeatNotificationButton() {
-        val session = mediaLibrarySession ?: return
-        // Broadcasting the media button preferences updates the media notification controller,
-        // which triggers a notification rebuild (onMediaButtonPreferencesChanged).
-        session.setMediaButtonPreferences(ImmutableList.of(repeatCommandButton(player.repeatMode)))
     }
 
     // ── Audio effects ─────────────────────────────────────────────────────────
@@ -596,7 +486,6 @@ class MusicService : MediaLibraryService() {
     override fun onTaskRemoved(rootIntent: Intent?) {
         val p = mediaLibrarySession?.player
         if (p == null || !p.playWhenReady || p.mediaItemCount == 0) stopSelf()
-        super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {

@@ -183,17 +183,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _settings.value.loudnessGainDb
             )
 
-            // Keep the in-app repeat icon in sync with the media-session Loop button.
-            service.onRepeatModeChanged = { repeatMode ->
-                _settings.value = _settings.value.copy(
-                    repeat = when (repeatMode) {
-                        Player.REPEAT_MODE_OFF -> RepeatMode.NONE
-                        Player.REPEAT_MODE_ALL -> RepeatMode.ALL
-                        else -> RepeatMode.ONE
-                    }
-                )
-            }
-
             // Attach listener and push current queue
             service.getPlayer().addListener(playbackListener)
             pushQueueToPlayer()
