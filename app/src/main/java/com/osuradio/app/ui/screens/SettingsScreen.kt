@@ -12,8 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -690,23 +689,20 @@ private fun SvBox(
             )
             .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black)))
             .pointerInput(Unit) {
-                awaitEachGesture {
-                    val down = awaitFirstDown()
-                    down.consume()
-                    fun update(position: Offset) {
+                detectDragGestures(
+                    onDragStart = { position ->
                         val x = (position.x / size.width).coerceIn(0f, 1f)
                         val y = (position.y / size.height).coerceIn(0f, 1f)
                         currentOnLiveChange(x, 1f - y)
-                    }
-                    update(down.position)
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull() ?: break
-                        if (change.changedToUpIgnoreConsumed()) break
-                        update(change.position)
-                    }
-                    currentOnCommit()
-                }
+                    },
+                    onDrag = { change, _ ->
+                        change.consume()
+                        val x = (change.position.x / size.width).coerceIn(0f, 1f)
+                        val y = (change.position.y / size.height).coerceIn(0f, 1f)
+                        currentOnLiveChange(x, 1f - y)
+                    },
+                    onDragEnd = { currentOnCommit() }
+                )
             }
     ) {
         Canvas(modifier = Modifier.matchParentSize()) {
@@ -744,21 +740,16 @@ private fun HueBar(
                 )
             )
             .pointerInput(Unit) {
-                awaitEachGesture {
-                    val down = awaitFirstDown()
-                    down.consume()
-                    fun update(position: Offset) {
+                detectDragGestures(
+                    onDragStart = { position ->
                         currentOnLiveChange((position.x / size.width).coerceIn(0f, 1f) * 360f)
-                    }
-                    update(down.position)
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull() ?: break
-                        if (change.changedToUpIgnoreConsumed()) break
-                        update(change.position)
-                    }
-                    currentOnCommit()
-                }
+                    },
+                    onDrag = { change, _ ->
+                        change.consume()
+                        currentOnLiveChange((change.position.x / size.width).coerceIn(0f, 1f) * 360f)
+                    },
+                    onDragEnd = { currentOnCommit() }
+                )
             }
     ) {
         Canvas(modifier = Modifier.matchParentSize()) {
