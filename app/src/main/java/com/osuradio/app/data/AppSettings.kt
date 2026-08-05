@@ -23,8 +23,23 @@ data class EqualizerSettings(
     val bandLevels: List<Int> = listOf(0, 0, 0, 0, 0)
 )
 
+data class ThemeColors(
+    val primary: Long? = null,
+    val onPrimary: Long? = null,
+    val secondary: Long? = null,
+    val onSecondary: Long? = null,
+    val tertiary: Long? = null,
+    val background: Long? = null,
+    val onBackground: Long? = null,
+    val surface: Long? = null,
+    val onSurface: Long? = null,
+    val surfaceVariant: Long? = null,
+    val onSurfaceVariant: Long? = null
+)
+
 data class AppSettings(
     val theme: AppTheme = AppTheme.PINK,
+    val themeColors: ThemeColors = ThemeColors(),
     val animationStyle: AnimationStyle = AnimationStyle.SLIDE,
     val audioTransition: AudioTransition = AudioTransition.FADE_IN_OUT,
     val shuffle: Boolean = false,
