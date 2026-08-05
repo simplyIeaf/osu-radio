@@ -1,6 +1,7 @@
 package com.osuradio.app.ui.screens
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -9,7 +10,10 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,11 +25,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Equalizer
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sync
@@ -50,15 +57,22 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -75,34 +89,6 @@ import com.osuradio.app.viewmodel.MainViewModel
 private val EQ_BAND_LABELS = listOf("Sub\n60Hz", "Bass\n230Hz", "Mid\n910Hz", "Hi\n3.6kHz", "Air\n14kHz")
 
 private data class SettingsTabSpec(val label: String, val icon: ImageVector)
-
-private val ACCENT_COLORS = listOf(
-    "Pink" to 0xFFFF66AA,
-    "Purple" to 0xFF9B59B6,
-    "Blue" to 0xFF3498DB,
-    "Cyan" to 0xFF00BCD4,
-    "Teal" to 0xFF26A69A,
-    "Green" to 0xFF66BB6A,
-    "Amber" to 0xFFFFC107,
-    "Orange" to 0xFFFF9800,
-    "Red" to 0xFFEF5350
-)
-
-private val BACKGROUND_COLORS = listOf(
-    "Dark" to 0xFF121212,
-    "Charcoal" to 0xFF101418,
-    "Purple" to 0xFF1A0A2E,
-    "Blue" to 0xFF0A1628,
-    "Green" to 0xFF0A1E12,
-    "Brown" to 0xFF1E1410
-)
-
-private val SURFACE_COLORS = listOf(
-    "Default" to 0xFF1E1E1E,
-    "Card" to 0xFF2A2A2A,
-    "Indigo" to 0xFF1A1A2E,
-    "Slate" to 0xFF232B36
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -237,43 +223,43 @@ private fun GeneralSettingsTab(viewModel: MainViewModel) {
                 val update = { newColors: ThemeColors ->
                     viewModel.updateSettings(settings.value.copy(themeColors = newColors))
                 }
-                ColorPickerRow(
+                ColorPickerField(
                     label    = "Accent",
                     current  = colors.primary,
-                    colors   = ACCENT_COLORS,
-                    onSelect = { color -> update(colors.copy(primary = color)) },
+                    defaultColor = MaterialTheme.colorScheme.primary,
+                    onColorChange = { color -> update(colors.copy(primary = color)) },
                     onReset  = { update(colors.copy(primary = null)) }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                ColorPickerRow(
+                ColorPickerField(
                     label    = "Accent Light",
                     current  = colors.secondary,
-                    colors   = ACCENT_COLORS,
-                    onSelect = { color -> update(colors.copy(secondary = color)) },
+                    defaultColor = MaterialTheme.colorScheme.secondary,
+                    onColorChange = { color -> update(colors.copy(secondary = color)) },
                     onReset  = { update(colors.copy(secondary = null)) }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                ColorPickerRow(
+                ColorPickerField(
                     label    = "Background",
                     current  = colors.background,
-                    colors   = BACKGROUND_COLORS,
-                    onSelect = { color -> update(colors.copy(background = color)) },
+                    defaultColor = MaterialTheme.colorScheme.background,
+                    onColorChange = { color -> update(colors.copy(background = color)) },
                     onReset  = { update(colors.copy(background = null)) }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                ColorPickerRow(
+                ColorPickerField(
                     label    = "Surface",
                     current  = colors.surface,
-                    colors   = SURFACE_COLORS,
-                    onSelect = { color -> update(colors.copy(surface = color)) },
+                    defaultColor = MaterialTheme.colorScheme.surface,
+                    onColorChange = { color -> update(colors.copy(surface = color)) },
                     onReset  = { update(colors.copy(surface = null)) }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                ColorPickerRow(
+                ColorPickerField(
                     label    = "Cards",
                     current  = colors.surfaceVariant,
-                    colors   = SURFACE_COLORS,
-                    onSelect = { color -> update(colors.copy(surfaceVariant = color)) },
+                    defaultColor = MaterialTheme.colorScheme.surfaceVariant,
+                    onColorChange = { color -> update(colors.copy(surfaceVariant = color)) },
                     onReset  = { update(colors.copy(surfaceVariant = null)) }
                 )
             }
@@ -592,25 +578,59 @@ private fun SettingsDropdown(
     }
 }
 
-/** Row of color swatches used to customize the theme. A highlighted border marks the active color. */
 @Composable
-private fun ColorPickerRow(
+private fun ColorPickerField(
     label: String,
     current: Long?,
-    colors: List<Pair<String, Long>>,
-    onSelect: (Long) -> Unit,
+    defaultColor: Color,
+    onColorChange: (Long) -> Unit,
     onReset: () -> Unit
 ) {
+    var expanded by remember { mutableStateOf(false) }
+    val baseColor = current?.let { Color(it.toInt()) } ?: defaultColor
+    val baseHsv = remember(baseColor) { argbToHsv(baseColor.toArgb().toLong()) }
+    var hue by remember(baseColor) { mutableFloatStateOf(baseHsv[0]) }
+    var saturation by remember(baseColor) { mutableFloatStateOf(baseHsv[1]) }
+    var value by remember(baseColor) { mutableFloatStateOf(baseHsv[2]) }
+
+    val displayColor = if (expanded) Color(hsvToArgb(hue, saturation, value).toInt()) else baseColor
+
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { expanded = !expanded }
+                .padding(vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(displayColor)
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                        shape = CircleShape
+                    )
+            )
+            Spacer(modifier = Modifier.width(10.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = argbHex(displayColor.toArgb().toLong()),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Icon(
+                imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = if (expanded) "Collapse" else "Expand",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
             TextButton(onClick = onReset) {
                 Text(
@@ -620,27 +640,178 @@ private fun ColorPickerRow(
                 )
             }
         }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            colors.forEach { (_, color) ->
-                val selected = current == color
-                Box(
+        AnimatedVisibility(visible = expanded) {
+            Column(modifier = Modifier.padding(top = 8.dp)) {
+                SvBox(
+                    hue = hue,
+                    saturation = saturation,
+                    value = value,
+                    onLiveChange = { s, v ->
+                        saturation = s
+                        value = v
+                    },
+                    onCommit = { onColorChange(hsvToArgb(hue, saturation, value)) },
                     modifier = Modifier
-                        .size(30.dp)
-                        .clip(CircleShape)
-                        .background(Color(color))
-                        .border(
-                            width = if (selected) 3.dp else 1.dp,
-                            color = if (selected)
-                                MaterialTheme.colorScheme.onSurface
-                            else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                            shape = CircleShape
-                        )
-                        .clickable { onSelect(color) }
+                        .fillMaxWidth()
+                        .height(140.dp)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                HueBar(
+                    hue = hue,
+                    onLiveChange = { hue = it },
+                    onCommit = { onColorChange(hsvToArgb(hue, saturation, value)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(28.dp)
                 )
             }
         }
     }
+}
+
+@Composable
+private fun SvBox(
+    hue: Float,
+    saturation: Float,
+    value: Float,
+    onLiveChange: (Float, Float) -> Unit,
+    onCommit: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val currentOnLiveChange by rememberUpdatedState(onLiveChange)
+    val currentOnCommit by rememberUpdatedState(onCommit)
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(
+                Brush.horizontalGradient(
+                    listOf(Color.White, Color(hsvToArgb(hue, 1f, 1f).toInt()))
+                )
+            )
+            .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black)))
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    down.consume()
+                    fun update(position: Offset) {
+                        val x = (position.x / size.width).coerceIn(0f, 1f)
+                        val y = (position.y / size.height).coerceIn(0f, 1f)
+                        currentOnLiveChange(x, 1f - y)
+                    }
+                    update(down.position)
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull() ?: break
+                        if (change.changedToUpIgnoreConsumed()) break
+                        update(change.position)
+                    }
+                    currentOnCommit()
+                }
+            }
+    ) {
+        Canvas(modifier = Modifier.matchParentSize()) {
+            val cx = saturation * size.width
+            val cy = (1f - value) * size.height
+            drawCircle(Color.White, 6.dp.toPx(), Offset(cx, cy))
+            drawCircle(Color.Black, 6.dp.toPx(), Offset(cx, cy), style = Stroke(2.dp.toPx()))
+        }
+    }
+}
+
+@Composable
+private fun HueBar(
+    hue: Float,
+    onLiveChange: (Float) -> Unit,
+    onCommit: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val currentOnLiveChange by rememberUpdatedState(onLiveChange)
+    val currentOnCommit by rememberUpdatedState(onCommit)
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(
+                Brush.horizontalGradient(
+                    listOf(
+                        Color(0xFFFF0000),
+                        Color(0xFFFFFF00),
+                        Color(0xFF00FF00),
+                        Color(0xFF00FFFF),
+                        Color(0xFF0000FF),
+                        Color(0xFFFF00FF),
+                        Color(0xFFFF0000)
+                    )
+                )
+            )
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    down.consume()
+                    fun update(position: Offset) {
+                        currentOnLiveChange((position.x / size.width).coerceIn(0f, 1f) * 360f)
+                    }
+                    update(down.position)
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull() ?: break
+                        if (change.changedToUpIgnoreConsumed()) break
+                        update(change.position)
+                    }
+                    currentOnCommit()
+                }
+            }
+    ) {
+        Canvas(modifier = Modifier.matchParentSize()) {
+            val cx = (hue / 360f) * size.width
+            val cy = size.height / 2f
+            drawCircle(Color.White, 6.dp.toPx(), Offset(cx, cy), style = Stroke(2.dp.toPx()))
+            drawCircle(Color(0xFF444444), 3.dp.toPx(), Offset(cx, cy))
+        }
+    }
+}
+
+private fun argbHex(argb: Long): String {
+    val value = argb.toInt()
+    return String.format(
+        "#%02X%02X%02X",
+        (value shr 16) and 0xFF,
+        (value shr 8) and 0xFF,
+        value and 0xFF
+    )
+}
+
+private fun argbToHsv(argb: Long): FloatArray {
+    val color = Color(argb.toInt())
+    val r = color.red
+    val g = color.green
+    val b = color.blue
+    val max = maxOf(r, g, b)
+    val min = minOf(r, g, b)
+    val d = max - min
+    val hue = when {
+        d == 0f -> 0f
+        max == r -> 60f * (((g - b) / d) % 6f)
+        max == g -> 60f * ((b - r) / d + 2f)
+        else -> 60f * ((r - g) / d + 4f)
+    }
+    val saturation = if (max == 0f) 0f else d / max
+    return floatArrayOf((hue + 360f) % 360f, saturation, max)
+}
+
+private fun hsvToArgb(hue: Float, saturation: Float, value: Float): Long {
+    val hh = (((hue % 360f) + 360f) % 360f) / 60f
+    val i = hh.toInt()
+    val f = hh - i
+    val p = value * (1f - saturation)
+    val q = value * (1f - f * saturation)
+    val t = value * (1f - (1f - f) * saturation)
+    val (r, g, b) = when (i) {
+        0 -> Triple(value, t, p)
+        1 -> Triple(q, value, p)
+        2 -> Triple(p, value, t)
+        3 -> Triple(p, q, value)
+        4 -> Triple(t, p, value)
+        else -> Triple(value, p, q)
+    }
+    return Color(r, g, b).toArgb().toLong()
 }
