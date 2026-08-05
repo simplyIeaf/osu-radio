@@ -21,6 +21,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -89,6 +93,7 @@ fun PlaylistsScreen(
     var showFiltersMenu by remember { mutableStateOf(false) }
     var sortOption by remember { mutableStateOf("A-Z") }
     val filtersSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val gridState = rememberLazyGridState()
 
     // Search state for filtering playlists
     var playlistSearch by remember { mutableStateOf("") }
@@ -96,11 +101,7 @@ fun PlaylistsScreen(
     val searchedPlaylists = if (playlistSearch.isBlank()) playlists.value
     else playlists.value.filter { it.name.lowercase().contains(playlistSearch.lowercase()) }
 
-    val filteredPlaylists = if (sortOption == "Z-A") {
-        searchedPlaylists.sortedByDescending { it.name.lowercase() }
-    } else {
-        searchedPlaylists.sortedBy { it.name.lowercase() }
-    }
+    val filteredPlaylists = searchedPlaylists.sortedBy { it.name.lowercase() }
 
     Column(modifier = Modifier.fillMaxSize()) {
         ScreenHeader(
@@ -174,19 +175,41 @@ fun PlaylistsScreen(
                     )
                 }
             } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(filteredPlaylists, key = { it.id }) { playlist ->
-                        val songs = viewModel.getSongsForPlaylist(playlist)
-                        PlaylistCard(
-                            playlist = playlist,
-                            songs = songs,
-                            onOpen = { onOpenPlaylist(playlist) },
-                            onDelete = { viewModel.deletePlaylist(playlist.id) },
-                            onRename = { newName -> viewModel.renamePlaylist(playlist.id, newName) }
-                        )
+                if (settings.value.showAsRaster) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        state = gridState,
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(filteredPlaylists, key = { it.id }) { playlist ->
+                            val songs = viewModel.getSongsForPlaylist(playlist)
+                            PlaylistCard(
+                                playlist = playlist,
+                                songs = songs,
+                                onOpen = { onOpenPlaylist(playlist) },
+                                onDelete = { viewModel.deletePlaylist(playlist.id) },
+                                onRename = { newName -> viewModel.renamePlaylist(playlist.id, newName) }
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(filteredPlaylists, key = { it.id }) { playlist ->
+                            val songs = viewModel.getSongsForPlaylist(playlist)
+                            PlaylistCard(
+                                playlist = playlist,
+                                songs = songs,
+                                onOpen = { onOpenPlaylist(playlist) },
+                                onDelete = { viewModel.deletePlaylist(playlist.id) },
+                                onRename = { newName -> viewModel.renamePlaylist(playlist.id, newName) }
+                            )
+                        }
                     }
                 }
             }
@@ -277,13 +300,6 @@ fun PlaylistsScreen(
                         text = { Text("A-Z", style = MaterialTheme.typography.bodyMedium) },
                         onClick = {
                             sortOption = "A-Z"
-                            filtersExpanded = false
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Z-A", style = MaterialTheme.typography.bodyMedium) },
-                        onClick = {
-                            sortOption = "Z-A"
                             filtersExpanded = false
                         }
                     )

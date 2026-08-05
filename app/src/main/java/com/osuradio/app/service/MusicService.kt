@@ -24,6 +24,7 @@ import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
@@ -251,11 +252,9 @@ class MusicService : MediaLibraryService() {
                 .setSessionActivity(sessionActivityPendingIntent)
                 .build()
 
-            val notificationProvider = DefaultMediaNotificationProvider.Builder(this)
-                .setChannelId(NOTIFICATION_CHANNEL_ID)
-                .setChannelName(R.string.channel_name)
-                .build()
-            notificationProvider.setSmallIcon(R.mipmap.ic_launcher)
+            val notificationProvider = PlaybackNotificationProvider(this, NOTIFICATION_CHANNEL_ID).apply {
+                setSmallIcon(R.mipmap.ic_launcher)
+            }
             setMediaNotificationProvider(notificationProvider)
 
             // Register headphone receivers
@@ -543,3 +542,36 @@ fun Song.toMediaItem(): MediaItem = MediaItem.Builder()
             .build()
     )
     .build()
+
+@OptIn(UnstableApi::class)
+private class PlaybackNotificationProvider(
+    context: Context,
+    channelId: String
+) : DefaultMediaNotificationProvider(
+    context,
+    { DefaultMediaNotificationProvider.DEFAULT_NOTIFICATION_ID },
+    channelId,
+    R.string.channel_name
+) {
+    override fun getMediaButtons(
+        session: MediaSession,
+        playerCommands: Player.Commands,
+        mediaButtonPreferences: ImmutableList<CommandButton>,
+        showPauseButton: Boolean
+    ): ImmutableList<CommandButton> {
+        return ImmutableList.of(
+            CommandButton.Builder(CommandButton.ICON_PREVIOUS)
+                .setPlayerCommand(Player.COMMAND_SEEK_TO_PREVIOUS)
+                .setDisplayName("Previous")
+                .build(),
+            CommandButton.Builder(if (showPauseButton) CommandButton.ICON_PAUSE else CommandButton.ICON_PLAY)
+                .setPlayerCommand(Player.COMMAND_PLAY_PAUSE)
+                .setDisplayName(if (showPauseButton) "Pause" else "Play")
+                .build(),
+            CommandButton.Builder(CommandButton.ICON_NEXT)
+                .setPlayerCommand(Player.COMMAND_SEEK_TO_NEXT)
+                .setDisplayName("Next")
+                .build()
+        )
+    }
+}

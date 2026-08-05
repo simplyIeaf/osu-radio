@@ -102,7 +102,7 @@ fun DownloadScreen(viewModel: MainViewModel) {
                     "$activeDownloads downloading • $queuedDownloads queued"
                 activeDownloads > 0 -> "$activeDownloads downloading"
                 queuedDownloads > 0 -> "$queuedDownloads queued"
-                else -> "Search and download beatmaps from osu!droid"
+                else -> "Search and download beatmaps"
             }
         )
 

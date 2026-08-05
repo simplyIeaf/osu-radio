@@ -1,5 +1,7 @@
 package com.osuradio.app.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -216,14 +218,6 @@ private fun GeneralSettingsTab(viewModel: MainViewModel) {
                     checked  = settings.value.autoCheckUpdates,
                     onChange = { viewModel.updateSettings(settings.value.copy(autoCheckUpdates = it)) }
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-                SettingsToggle(
-                    title    = "Show songs as raster",
-                    subtitle = "Display songs in a two-column grid",
-                    checked  = settings.value.showAsRaster,
-                    onChange = { viewModel.updateSettings(settings.value.copy(showAsRaster = it)) }
-                )
             }
         }
         item {
@@ -426,7 +420,7 @@ private fun SynchronizationSettingsTab(viewModel: MainViewModel) {
                         modifier = Modifier.padding(end = 8.dp)
                     )
                     Text(
-                        text = if (isSyncing.value) "Syncing..." else "Sync songs from osu!droid",
+                        text = if (isSyncing.value) "Syncing..." else "osu!droid",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -438,6 +432,7 @@ private fun SynchronizationSettingsTab(viewModel: MainViewModel) {
 
 @Composable
 private fun AboutTab() {
+    val context = LocalContext.current
     LazyColumn(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -457,7 +452,20 @@ private fun AboutTab() {
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text("Developer", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-                    Text("@simplyIeaf", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(
+                        text = "@simplyIeaf",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable {
+                            context.startActivity(
+                                Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse("https://github.com/simplyIeaf")
+                                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        }
+                    )
                 }
             }
         }
