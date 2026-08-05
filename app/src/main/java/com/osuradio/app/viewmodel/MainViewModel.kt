@@ -71,6 +71,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLoading        = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    private val _loadingMessage   = MutableStateFlow("Starting osu!radio...")
+    val loadingMessage: StateFlow<String> = _loadingMessage.asStateFlow()
+
     private val _searchQuery      = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
@@ -258,15 +261,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 Logger.init(osuRadioDir)
                 ConfigManager.init(osuRadioDir)
 
+                _loadingMessage.value = "Loading your settings..."
                 withContext(Dispatchers.Main) {
                     _settings.value = ConfigManager.getSettings()
                     _playlists.value = ConfigManager.getPlaylists()
                 }
 
+                _loadingMessage.value = "Loading your library..."
                 val existingSongs = SongScanner.loadAlreadyScannedSongs(context)
                 val newSongs: List<Song>
                 if (_settings.value.syncWithOsuDroid) {
-                    newSongs = SongScanner.scanAndCopySongs(context) { }
+                    _loadingMessage.value = "Syncing with osu!droid..."
+                    newSongs = SongScanner.scanAndCopySongs(context) { progress ->
+                        _loadingMessage.value = progress
+                    }
                 } else {
                     newSongs = emptyList()
                 }
@@ -276,6 +284,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 newSongs.forEach { allSongsMap[it.id] = it }
                 val allSongs = allSongsMap.values.toList().sortedBy { it.artist }
 
+                _loadingMessage.value = "Preparing your player..."
                 withContext(Dispatchers.Main) {
                     _songs.value = allSongs
                     setQueueAndPush(allSongs)
