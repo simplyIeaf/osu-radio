@@ -27,11 +27,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -42,6 +45,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -174,7 +178,7 @@ fun MainApp(
     val updatePrompt = viewModel.updatePrompt.collectAsState()
     val updateDownloading = viewModel.updateDownloading.collectAsState()
     val updateProgress = viewModel.updateDownloadProgress.collectAsState()
-    val successUpdateVersion = viewModel.successUpdateVersion.collectAsState()
+    val releaseNotes = viewModel.releaseNotes.collectAsState()
     val updateFailed = viewModel.updateFailed.collectAsState()
 
     var showPlayer by remember { mutableStateOf(false) }
@@ -189,17 +193,6 @@ fun MainApp(
         NavTab("Download", Icons.Filled.Download),
         NavTab("Settings", Icons.Filled.Settings)
     )
-
-    LaunchedEffect(successUpdateVersion.value) {
-        val ver = successUpdateVersion.value
-        if (!ver.isNullOrEmpty()) {
-            snackbarHostState.showSnackbar(
-                message = "osu!radio has been updated to $ver",
-                actionLabel = "OK"
-            )
-            viewModel.dismissSuccessUpdate()
-        }
-    }
 
     LaunchedEffect(updatePrompt.value) {
         val prompt = updatePrompt.value ?: return@LaunchedEffect
@@ -249,6 +242,23 @@ fun MainApp(
     if (isLoading.value) {
         LoadingScreen(message = viewModel.loadingMessage.collectAsState().value)
         return
+    }
+
+    releaseNotes.value?.let { notes ->
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissReleaseNotes() },
+            title = { Text("What's new in v${notes.version}") },
+            text = {
+                Text(
+                    text = notes.notes,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.verticalScroll(rememberScrollState())
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissReleaseNotes() }) { Text("Got it") }
+            }
+        )
     }
 
     // Use AnimatedContent for the player/main-screen transition so both screens participate
