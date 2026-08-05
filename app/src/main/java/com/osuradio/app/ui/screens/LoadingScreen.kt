@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -16,7 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,14 +25,22 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.osuradio.app.BuildConfig
 import com.osuradio.app.R
 
 @Composable
 fun LoadingScreen(message: String) {
+    val primary = MaterialTheme.colorScheme.primary
+    val secondary = MaterialTheme.colorScheme.secondary
+
     val infiniteTransition = rememberInfiniteTransition(label = "loading")
     val pulse by infiniteTransition.animateFloat(
         initialValue = 0.9f,
@@ -42,11 +51,36 @@ fun LoadingScreen(message: String) {
         ),
         label = "pulse"
     )
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1600, easing = LinearEasing)
+        ),
+        label = "rotation"
+    )
+    val glowAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.15f,
+        targetValue = 0.35f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "glow"
+    )
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        primary.copy(alpha = 0.18f),
+                        MaterialTheme.colorScheme.background,
+                        secondary.copy(alpha = 0.08f)
+                    )
+                )
+            ),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -55,16 +89,31 @@ fun LoadingScreen(message: String) {
             modifier = Modifier.padding(32.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(100.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    strokeWidth = 3.dp
+                // Soft pulsing glow behind the logo
+                Box(
+                    modifier = Modifier
+                        .size(120.dp)
+                        .background(
+                            color = primary.copy(alpha = glowAlpha),
+                            shape = androidx.compose.foundation.shape.CircleShape
+                        )
                 )
+                // Rotating dashed ring
+                Canvas(modifier = Modifier.size(120.dp)) {
+                    val stroke = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                    drawArc(
+                        color = primary,
+                        startAngle = rotation,
+                        sweepAngle = 270f,
+                        useCenter = false,
+                        style = stroke
+                    )
+                }
                 Image(
                     painter = painterResource(id = R.drawable.ic_app_logo),
                     contentDescription = "osu!radio logo",
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(52.dp)
                         .scale(pulse)
                 )
             }
@@ -81,6 +130,18 @@ fun LoadingScreen(message: String) {
                 text = message,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            LinearProgressIndicator(
+                modifier = Modifier.size(width = 160.dp, height = 4.dp),
+                color = primary,
+                trackColor = primary.copy(alpha = 0.15f)
+            )
+            Spacer(modifier = Modifier.height(48.dp))
+            Text(
+                text = "v${BuildConfig.APP_VERSION}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
             )
         }
     }
