@@ -396,6 +396,7 @@ class MusicService : MediaLibraryService() {
 
     fun pauseResume() { if (player.isPlaying) fadeOutPause() else fadeInPlay() }
     fun pause() { fadeOutPause() }
+    fun pauseImmediately() { player.pause() }
     fun seekTo(ms: Long) { player.seekTo(ms) }
 
     fun setShuffleMode(enabled: Boolean) { player.shuffleModeEnabled = enabled }

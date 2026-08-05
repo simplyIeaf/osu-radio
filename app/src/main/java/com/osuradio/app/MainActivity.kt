@@ -7,7 +7,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
-import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
@@ -236,15 +235,6 @@ fun MainApp(
         }
     }
 
-    LaunchedEffect(isPlaying.value, settings.value.keepScreenOnWhilePlaying) {
-        val keepScreenOn = isPlaying.value && settings.value.keepScreenOnWhilePlaying
-        if (keepScreenOn) {
-            activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        } else {
-            activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        }
-    }
-
     LaunchedEffect(isLoading.value) {
         if (!isLoading.value) selectedTab = viewModel.settings.value.lastTab
     }
@@ -314,7 +304,17 @@ fun MainApp(
                 snackbarHost = { SnackbarHost(snackbarHostState) },
                 bottomBar = {
                     Column {
-                        AnimatedVisibility(visible = currentSong.value != null) {
+                        AnimatedVisibility(
+                            visible = currentSong.value != null,
+                            enter = slideInVertically(
+                                initialOffsetY = { it },
+                                animationSpec = tween(300)
+                            ) + fadeIn(animationSpec = tween(250)),
+                            exit = slideOutVertically(
+                                targetOffsetY = { it },
+                                animationSpec = tween(300)
+                            ) + fadeOut(animationSpec = tween(250))
+                        ) {
                             MiniPlayer(
                                 song = currentSong.value!!,
                                 isPlaying = isPlaying.value,

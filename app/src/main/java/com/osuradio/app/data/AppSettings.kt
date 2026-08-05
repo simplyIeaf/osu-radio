@@ -52,6 +52,5 @@ data class AppSettings(
     val loudnessNormalization: Boolean = false,
     val loudnessGainDb: Int = 3,
     val showAsRaster: Boolean = false,
-    val keepScreenOnWhilePlaying: Boolean = false,
     val lastTab: Int = 0
 )

@@ -278,6 +278,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val ms = restorePositionMs
         if (ms <= 0L) return
         service.seekTo(ms)
+        service.pauseImmediately()
         _currentPositionMs.value = ms
         restoreSongId = null
         restorePositionMs = 0L

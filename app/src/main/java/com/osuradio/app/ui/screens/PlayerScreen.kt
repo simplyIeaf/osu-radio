@@ -1,10 +1,16 @@
 package com.osuradio.app.ui.screens
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -66,6 +72,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -97,6 +104,16 @@ fun PlayerScreen(
     var showSleepTimer by remember { mutableStateOf(false) }
     var showQueue by remember { mutableStateOf(false) }
     var showRemaining by remember { mutableStateOf(false) }
+    val playInteraction = remember { MutableInteractionSource() }
+    val playPressed by playInteraction.collectIsPressedAsState()
+    val playScale by animateFloatAsState(
+        targetValue = if (playPressed) 0.88f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "play_scale"
+    )
     val modsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val queueSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scrollState = rememberScrollState()
@@ -215,22 +232,28 @@ fun PlayerScreen(
                         )
                     }
             ) {
-                if (song.imagePath != null) {
-                    AsyncImage(
-                        model = song.imagePath,
-                        contentDescription = "Album art",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Filled.MusicNote,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .size(80.dp)
-                            .align(Alignment.Center)
-                    )
+                Crossfade(
+                    targetState = song.imagePath,
+                    animationSpec = tween(400),
+                    label = "album_art"
+                ) { imagePath ->
+                    if (imagePath != null) {
+                        AsyncImage(
+                            model = imagePath,
+                            contentDescription = "Album art",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Filled.MusicNote,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .size(80.dp)
+                                .align(Alignment.Center)
+                        )
+                    }
                 }
             }
 
@@ -320,11 +343,18 @@ fun PlayerScreen(
                 Box(
                     modifier = Modifier
                         .size(68.dp)
+                        .graphicsLayer {
+                            scaleX = playScale
+                            scaleY = playScale
+                        }
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.primary),
                     contentAlignment = Alignment.Center
                 ) {
-                    IconButton(onClick = { viewModel.pauseResume() }) {
+                    IconButton(
+                        onClick = { viewModel.pauseResume() },
+                        interactionSource = playInteraction
+                    ) {
                         Icon(
                             imageVector = if (isPlaying.value) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                             contentDescription = if (isPlaying.value) "Pause" else "Play",

@@ -224,14 +224,6 @@ private fun GeneralSettingsTab(viewModel: MainViewModel) {
                     checked  = settings.value.showAsRaster,
                     onChange = { viewModel.updateSettings(settings.value.copy(showAsRaster = it)) }
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-                SettingsToggle(
-                    title    = "Keep screen on while playing",
-                    subtitle = "Prevents the screen from turning off during playback",
-                    checked  = settings.value.keepScreenOnWhilePlaying,
-                    onChange = { viewModel.updateSettings(settings.value.copy(keepScreenOnWhilePlaying = it)) }
-                )
             }
         }
         item {
