@@ -103,7 +103,10 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val settings = viewModel.settings.collectAsState()
-            OsuRadioTheme(theme = settings.value.theme) {
+            OsuRadioTheme(
+                theme = settings.value.theme,
+                colors = settings.value.themeColors
+            ) {
                 MainApp(
                     viewModel = viewModel,
                     animationStyle = settings.value.animationStyle,
@@ -240,7 +243,7 @@ fun MainApp(
     }
 
     if (isLoading.value) {
-        LoadingScreen(message = viewModel.loadingMessage.collectAsState().value)
+        LoadingScreen()
         return
     }
 
@@ -364,19 +367,38 @@ fun MainApp(
                                 }
                             )
                             1 -> {
-                                val playlist = selectedPlaylist
-                                if (playlist != null) {
-                                    PlaylistDetailScreen(
-                                        viewModel = viewModel,
-                                        playlist = playlist,
-                                        onBack = { selectedPlaylist = null },
-                                        onSongClick = { showPlayer = true }
-                                    )
-                                } else {
-                                    PlaylistsScreen(
-                                        viewModel = viewModel,
-                                        onOpenPlaylist = { selectedPlaylist = it }
-                                    )
+                                AnimatedContent(
+                                    targetState = selectedPlaylist,
+                                    transitionSpec = {
+                                        if (targetState != null) {
+                                            (slideInVertically(
+                                                initialOffsetY = { it },
+                                                animationSpec = tween(300)
+                                            ) + fadeIn(animationSpec = tween(200))) togetherWith
+                                                fadeOut(animationSpec = tween(150))
+                                        } else {
+                                            fadeIn(animationSpec = tween(150)) togetherWith
+                                                (slideOutVertically(
+                                                    targetOffsetY = { it },
+                                                    animationSpec = tween(300)
+                                                ) + fadeOut(animationSpec = tween(200)))
+                                        }
+                                    },
+                                    label = "playlist_detail"
+                                ) { playlist ->
+                                    if (playlist != null) {
+                                        PlaylistDetailScreen(
+                                            viewModel = viewModel,
+                                            playlist = playlist,
+                                            onBack = { selectedPlaylist = null },
+                                            onSongClick = { showPlayer = true }
+                                        )
+                                    } else {
+                                        PlaylistsScreen(
+                                            viewModel = viewModel,
+                                            onOpenPlaylist = { selectedPlaylist = it }
+                                        )
+                                    }
                                 }
                             }
                             2 -> DownloadScreen(viewModel = viewModel)
