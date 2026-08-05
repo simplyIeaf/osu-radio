@@ -1,6 +1,5 @@
 package com.osuradio.app.service
 
-import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -8,13 +7,11 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.ServiceInfo
 import android.media.AudioManager
 import android.media.audiofx.Equalizer
 import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import android.os.Binder
-import android.os.Build
 import android.os.IBinder
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
@@ -27,6 +24,7 @@ import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaLibraryService.LibraryParams
@@ -81,8 +79,7 @@ class MusicService : MediaLibraryService() {
     companion object {
         private const val ROOT_ID  = "root"
         private const val SONGS_ID = "songs"
-        private const val FOREGROUND_NOTIFICATION_ID = 1002
-        private const val FOREGROUND_CHANNEL_ID = "osu_radio_foreground"
+        private const val NOTIFICATION_CHANNEL_ID = "osu_radio_playback"
     }
 
     inner class LocalBinder : Binder() {
@@ -121,10 +118,6 @@ class MusicService : MediaLibraryService() {
     // ── Player listener ───────────────────────────────────────────────────────
 
     private val playerListener = object : Player.Listener {
-        override fun onIsPlayingChanged(isPlaying: Boolean) {
-            if (isPlaying) startForegroundQuietly()
-        }
-
         /**
          * Audio session ID changes after the audio renderer is initialized.
          * Create / recreate audio effects here to bind them to the correct session.
@@ -258,6 +251,13 @@ class MusicService : MediaLibraryService() {
                 .setSessionActivity(sessionActivityPendingIntent)
                 .build()
 
+            val notificationProvider = DefaultMediaNotificationProvider.Builder(this)
+                .setChannelId(NOTIFICATION_CHANNEL_ID)
+                .setChannelName(R.string.channel_name)
+                .build()
+            notificationProvider.setSmallIcon(R.mipmap.ic_launcher)
+            setMediaNotificationProvider(notificationProvider)
+
             // Register headphone receivers
             createForegroundChannel()
             registerReceiver(noisyReceiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
@@ -284,38 +284,11 @@ class MusicService : MediaLibraryService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? =
         mediaLibrarySession
 
-    override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
-    }
-
-    private fun startForegroundQuietly() {
-        try {
-            val notification = Notification.Builder(this, FOREGROUND_CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_transparent)
-                .setOngoing(true)
-                .setOnlyAlertOnce(true)
-                .setVisibility(Notification.VISIBILITY_SECRET)
-                .setCategory(Notification.CATEGORY_SERVICE)
-                .setShowWhen(false)
-                .build()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(
-                    FOREGROUND_NOTIFICATION_ID,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-                )
-            } else {
-                startForeground(FOREGROUND_NOTIFICATION_ID, notification)
-            }
-        } catch (e: Exception) {
-            Logger.error(TAG, "Failed to start foreground service", e)
-        }
-    }
-
     private fun createForegroundChannel() {
         val channel = NotificationChannel(
-            FOREGROUND_CHANNEL_ID,
+            NOTIFICATION_CHANNEL_ID,
             getString(R.string.channel_name),
-            NotificationManager.IMPORTANCE_MIN
+            NotificationManager.IMPORTANCE_LOW
         ).apply {
             description = getString(R.string.channel_description)
             setShowBadge(false)

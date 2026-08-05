@@ -5,5 +5,5 @@
     <string name="tab_playlists">Playlists</string>
     <string name="tab_settings">Settings</string>
     <string name="channel_name">osu!radio Playback</string>
-    <string name="channel_description">Keeps playback running while the app is open</string>
+    <string name="channel_description">Music playback controls</string>
 </resources>
