@@ -17,25 +17,26 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.osuradio.app.BuildConfig
 import com.osuradio.app.R
 
 @Composable
-fun LoadingScreen() {
+fun LoadingScreen(message: String = "Loading...") {
     val primary = MaterialTheme.colorScheme.primary
     val secondary = MaterialTheme.colorScheme.secondary
 
@@ -82,10 +83,12 @@ fun LoadingScreen() {
                 Box(
                     modifier = Modifier
                         .size(112.dp)
-                        .background(
-                            color = primary.copy(alpha = glowAlpha),
-                            shape = CircleShape
-                        )
+                        .drawBehind {
+                            drawCircle(
+                                color = primary.copy(alpha = glowAlpha),
+                                radius = size.minDimension / 2f
+                            )
+                        }
                 )
                 Image(
                     painter = painterResource(id = R.drawable.ic_app_logo),
@@ -107,12 +110,19 @@ fun LoadingScreen() {
             Spacer(modifier = Modifier.height(36.dp))
             Text(
                 text = "Loading",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-                fontSize = 32.sp
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 26.sp,
+                fontWeight = FontWeight.SemiBold
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(20.dp))
             Text(
                 text = "v${BuildConfig.APP_VERSION}",
                 style = MaterialTheme.typography.labelMedium,
