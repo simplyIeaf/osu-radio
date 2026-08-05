@@ -95,14 +95,6 @@ object NerinyanApi {
     fun backgroundImageUrl(beatmapsetId: Long): String =
         "$BASE_URL/media/background/set/$beatmapsetId"
 
-    /**
-     * Downloads a beatmap archive. If [resumeFromBytes] is set and the file already
-     * has that many bytes on disk, an HTTP `Range` request is issued so the download
-     * continues where it left off. Servers that ignore `Range` simply restart the file.
-     *
-     * osu.direct intermittently rejects requests for maps it actually has, so failed
-     * attempts are retried with a short delay.
-     */
     suspend fun downloadBeatmapset(
         beatmapsetId: Long,
         destination: File,
@@ -112,17 +104,46 @@ object NerinyanApi {
     ): Boolean = withContext(Dispatchers.IO) {
         var resume = resumeFromBytes
         repeat(3) { attempt ->
+            // Never resume from a file that isn't a valid zip prefix — a partial HTML/error
+            // response can't be extended with raw byte ranges, so restart the file instead.
+            if (resume > 0 && !isZipFile(destination)) {
+                Logger.warn(TAG, "Discarding corrupt partial file for beatmapset $beatmapsetId")
+                destination.delete()
+                resume = 0L
+            }
             val success = try {
                 downloadBeatmapsetOnce(beatmapsetId, destination, onProgress, resume, noVideo)
             } catch (e: Exception) {
                 Logger.error(TAG, "Download attempt ${attempt + 1} failed for beatmapset $beatmapsetId", e)
                 false
             }
-            if (success) return@withContext true
-            resume = destination.length()
+            if (success) {
+                if (isZipFile(destination)) return@withContext true
+                // The server responded successfully but the body isn't a beatmap archive
+                // (e.g. an error page). Retry with a clean slate.
+                Logger.warn(TAG, "Downloaded file is not a valid archive for beatmapset $beatmapsetId, retrying")
+                destination.delete()
+                resume = 0L
+            } else {
+                resume = destination.length()
+            }
             if (attempt < 2) delay(1500L * (attempt + 1))
         }
         false
+    }
+
+    /** True if [file] starts with the `PK` zip magic bytes. */
+    private fun isZipFile(file: File): Boolean {
+        if (!file.exists() || file.length() < 4) return false
+        return try {
+            val magic = ByteArray(2)
+            file.inputStream().use { input ->
+                if (input.read(magic) != 2) return false
+            }
+            magic[0] == 0x50.toByte() && magic[1] == 0x4B.toByte()
+        } catch (e: Exception) {
+            false
+        }
     }
 
     private suspend fun downloadBeatmapsetOnce(
