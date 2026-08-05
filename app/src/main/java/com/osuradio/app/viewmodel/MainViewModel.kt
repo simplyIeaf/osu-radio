@@ -42,6 +42,8 @@ import java.util.UUID
 
 data class UpdatePrompt(val latestVersion: String, val apkUrl: String)
 
+data class ReleaseNotesPrompt(val version: String, val notes: String)
+
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val TAG = "MainViewModel"
 
@@ -87,8 +89,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _updateDownloadProgress = MutableStateFlow(0)
     val updateDownloadProgress: StateFlow<Int> = _updateDownloadProgress.asStateFlow()
 
-    private val _successUpdateVersion = MutableStateFlow<String?>(null)
-    val successUpdateVersion: StateFlow<String?> = _successUpdateVersion.asStateFlow()
+    private val _releaseNotes = MutableStateFlow<ReleaseNotesPrompt?>(null)
+    val releaseNotes: StateFlow<ReleaseNotesPrompt?> = _releaseNotes.asStateFlow()
 
     private val _updateFailed     = MutableStateFlow(false)
     val updateFailed: StateFlow<Boolean> = _updateFailed.asStateFlow()
@@ -101,7 +103,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
     private val downloadManager: DownloadManager by lazy {
-        DownloadManager(getApplication()) { song -> mergeSong(song) }
+        DownloadManager(getApplication()) { song ->
+            // DownloadManager runs its workers on Dispatchers.IO, but merging a song pushes
+            // the queue to ExoPlayer, which must only be touched on the main thread.
+            viewModelScope.launch(Dispatchers.Main) { mergeSong(song) }
+        }
     }
 
     private val _downloadSearchQuery  = MutableStateFlow("")
@@ -164,6 +170,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _settings.value.loudnessNormalization,
                 _settings.value.loudnessGainDb
             )
+
+            // Keep the in-app repeat icon in sync with the media-session Loop button.
+            service.onRepeatModeChanged = { repeatMode ->
+                _settings.value = _settings.value.copy(
+                    repeat = when (repeatMode) {
+                        Player.REPEAT_MODE_OFF -> RepeatMode.NONE
+                        Player.REPEAT_MODE_ALL -> RepeatMode.ALL
+                        else -> RepeatMode.ONE
+                    }
+                )
+            }
 
             // Attach listener and push current queue
             service.getPlayer().addListener(playbackListener)
@@ -234,10 +251,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 val existingSongs = SongScanner.loadAlreadyScannedSongs(context)
-                withContext(Dispatchers.Main) { _loadingMessage.value = "Scanning osu!droid..." }
-
-                val newSongs = SongScanner.scanAndCopySongs(context) { msg ->
-                    viewModelScope.launch(Dispatchers.Main) { _loadingMessage.value = msg }
+                val newSongs: List<Song>
+                if (_settings.value.syncWithOsuDroid) {
+                    withContext(Dispatchers.Main) { _loadingMessage.value = "Scanning osu!droid..." }
+                    newSongs = SongScanner.scanAndCopySongs(context) { msg ->
+                        viewModelScope.launch(Dispatchers.Main) { _loadingMessage.value = msg }
+                    }
+                } else {
+                    newSongs = emptyList()
                 }
 
                 val allSongsMap = mutableMapOf<String, Song>()
@@ -249,7 +270,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _songs.value = allSongs
                     setQueueAndPush(allSongs)
                     _isLoading.value = false
-                    checkSuccessfulUpdate(context)
+                    checkAppUpdated(context)
                 }
                 if (_settings.value.autoCheckUpdates) checkForUpdate(context)
             } catch (e: Exception) {
@@ -301,15 +322,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // ── Update checks ─────────────────────────────────────────────────────────
 
-    private fun checkSuccessfulUpdate(context: Context) {
+    /**
+     * Detects whether the app was updated since it last ran and, if so, shows the
+     * release notes for the current version. Compares the previously stored run
+     * version against [BuildConfig.APP_VERSION]; a first-ever install (no stored
+     * version) does not trigger the dialog. Also consumes a "pending success"
+     * marker written right before an in-app install.
+     */
+    private fun checkAppUpdated(context: Context) {
         val prefs = context.getSharedPreferences("osu_radio_update", Context.MODE_PRIVATE)
-        prefs.getString("pending_success_version", null)?.let {
-            _successUpdateVersion.value = it
-            prefs.edit().remove("pending_success_version").apply()
+        val lastRun = prefs.getString("last_run_version", null)
+        val current = BuildConfig.APP_VERSION
+        val hadPendingInstall = prefs.contains("pending_success_version")
+        prefs.edit()
+            .putString("last_run_version", current)
+            .remove("pending_success_version")
+            .apply()
+
+        val wasUpdated = (lastRun != null && lastRun != current) || hadPendingInstall
+        if (!wasUpdated) return
+        viewModelScope.launch {
+            val notes = UpdateChecker.fetchReleaseNotes(current)
+            _releaseNotes.value = ReleaseNotesPrompt(
+                version = current,
+                notes = notes ?: "No release notes are available for this version."
+            )
         }
     }
 
-    fun dismissSuccessUpdate() { _successUpdateVersion.value = null }
+    fun dismissReleaseNotes() { _releaseNotes.value = null }
 
     fun checkForUpdate(context: Context) {
         viewModelScope.launch {
