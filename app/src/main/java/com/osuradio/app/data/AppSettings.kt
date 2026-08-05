@@ -32,6 +32,7 @@ data class AppSettings(
     val volume: Float = 1.0f,
     val autoCheckUpdates: Boolean = true,
     val lastDismissedVersion: String = "",
+    val syncWithOsuDroid: Boolean = false,
     val equalizerSettings: EqualizerSettings = EqualizerSettings(),
     val loudnessNormalization: Boolean = false,
     val loudnessGainDb: Int = 3
