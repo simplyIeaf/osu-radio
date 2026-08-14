@@ -1,4 +1,5 @@
 import java.util.Properties
+import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 val versionProps = Properties().also { props ->
     file("version.properties").inputStream().use { props.load(it) }
@@ -56,34 +57,27 @@ compose.desktop {
     }
 }
 
-kotlin {
-    sourceSets {
-        val main by getting {
-            kotlin.srcDir("src/main/kotlin")
-            dependencies {
-                implementation(compose.desktop.currentOs)
-                implementation(compose.material3)
-                implementation(compose.materialIconsExtended)
-                implementation(compose.ui)
-                implementation(compose.foundation)
-                implementation(compose.animation)
+dependencies {
+    implementation(compose.desktop.currentOs)
+    implementation(compose.material3)
+    implementation(compose.materialIconsExtended)
+    implementation(compose.ui)
+    implementation(compose.foundation)
+    implementation(compose.animation)
 
-                implementation("com.squareup.okhttp3:okhttp:4.12.0")
-                implementation("com.google.code.gson:gson:2.11.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.google.code.gson:gson:2.11.0")
 
-                // mp3 + ogg/vorbis decoding through javax.sound.sampled SPI
-                implementation("com.googlecode.soundlibs:mp3spi:1.9.5.4")
-                implementation("com.googlecode.soundlibs:vorbisspi:1.0.3.3")
+    // mp3 + ogg/vorbis decoding through javax.sound.sampled SPI
+    implementation("com.googlecode.soundlibs:mp3spi:1.9.5.4")
+    implementation("com.googlecode.soundlibs:vorbisspi:1.0.3.3")
 
-                implementation(kotlin("stdlib"))
-            }
-        }
-    }
+    implementation(kotlin("stdlib"))
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-    kotlinOptions {
-        jvmTarget = "21"
-        freeCompilerArgs = freeCompilerArgs + "-Xjdk-release=21"
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
+        freeCompilerArgs.add("-Xjdk-release=21")
     }
 }
