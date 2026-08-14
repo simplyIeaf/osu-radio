@@ -34,8 +34,6 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
@@ -101,7 +99,6 @@ fun SettingsScreen(viewModel: MainViewModel) {
     val tabs = listOf(
         SettingsTabSpec("General", Icons.Filled.Settings),
         SettingsTabSpec("Audio", Icons.Filled.Equalizer),
-        SettingsTabSpec("Synchronization", Icons.Filled.Sync),
         SettingsTabSpec("About", Icons.Filled.Info)
     )
 
@@ -171,8 +168,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
                 when (tab) {
                     0 -> GeneralSettingsTab(viewModel)
                     1 -> AudioSettingsTab(viewModel)
-                    2 -> SynchronizationSettingsTab(viewModel)
-                    3 -> AboutTab()
+                    2 -> AboutTab()
                 }
             }
         }
@@ -389,37 +385,6 @@ private fun AudioSettingsTab(viewModel: MainViewModel) {
                         valueRange    = 0f..10f,
                         steps         = 9,
                         modifier      = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SynchronizationSettingsTab(viewModel: MainViewModel) {
-    val isSyncing = viewModel.isSyncing.collectAsState()
-
-    LazyColumn(
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item {
-            SettingsCard(title = "Synchronization") {
-                Button(
-                    onClick = { viewModel.syncSongs() },
-                    enabled = !isSyncing.value,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Sync,
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                    Text(
-                        text = if (isSyncing.value) "Syncing..." else "osu!droid",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }

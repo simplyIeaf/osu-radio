@@ -10,7 +10,9 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,6 +39,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -47,8 +50,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.ui.draganddrop.DragAndDropTarget
+import androidx.compose.ui.draganddrop.awtTransferable
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
@@ -57,6 +66,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.exitApplication
 import androidx.compose.ui.window.rememberWindowState
+import androidx.compose.ui.zIndex
 import com.osuradio.app.data.AnimationStyle
 import com.osuradio.app.data.Playlist
 import com.osuradio.app.ui.components.MiniPlayer
@@ -70,7 +80,9 @@ import com.osuradio.app.ui.screens.SettingsScreen
 import com.osuradio.app.ui.screens.SongsScreen
 import com.osuradio.app.ui.theme.OsuRadioTheme
 import com.osuradio.app.viewmodel.MainViewModel
+import kotlinx.coroutines.launch
 import java.awt.Desktop
+import java.awt.datatransfer.DataFlavor
 import java.io.File
 import javax.swing.JFileChooser
 import javax.swing.filechooser.FileNameExtensionFilter
@@ -136,12 +148,12 @@ fun MainApp(viewModel: MainViewModel) {
     LaunchedEffect(updatePrompt.value) {
         val prompt = updatePrompt.value ?: return@LaunchedEffect
         val result = snackbarHostState.showSnackbar(
-            message = "Would you like to update to ${prompt.latestVersion}?",
-            actionLabel = "Yes",
+            message = "Update available: ${prompt.latestVersion}",
+            actionLabel = "Get it",
             withDismissAction = true
         )
         when (result) {
-            SnackbarResult.ActionPerformed -> viewModel.startDownloadAndUpdate()
+            SnackbarResult.ActionPerformed -> uriHandler.openUri("https://github.com/simplyIeaf/osu-radio/releases/latest")
             SnackbarResult.Dismissed -> viewModel.dismissUpdate()
         }
     }
@@ -218,13 +230,14 @@ fun MainApp(viewModel: MainViewModel) {
         )
     }
 
-    // Use AnimatedContent for the player/main-screen transition so both screens participate
-    // in the animation and there's no z-fighting or instant Scaffold appearance.
-    val showPlayerFull = showPlayer && currentSong != null
-    AnimatedContent(
-        targetState = showPlayerFull,
-        transitionSpec = {
-            when (settings.animationStyle) {
+    FileDropContainer(viewModel = viewModel, snackbarHostState = snackbarHostState) {
+        // Use AnimatedContent for the player/main-screen transition so both screens participate
+        // in the animation and there's no z-fighting or instant Scaffold appearance.
+        val showPlayerFull = showPlayer && currentSong != null
+        AnimatedContent(
+            targetState = showPlayerFull,
+            transitionSpec = {
+                when (settings.animationStyle) {
                 AnimationStyle.SLIDE -> {
                     if (targetState) {
                         // Opening player: slide up
@@ -399,6 +412,91 @@ fun MainApp(viewModel: MainViewModel) {
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+    }
+}
+
+@OptIn(ExperimentalComposeUiApi::class, ExperimentalFoundationApi::class)
+@Composable
+private fun FileDropContainer(
+    viewModel: MainViewModel,
+    snackbarHostState: SnackbarHostState,
+    content: @Composable () -> Unit
+) {
+    var isDragging by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    val dropTarget = remember {
+        object : DragAndDropTarget {
+            override fun onEntered(event: DragAndDropEvent) {
+                isDragging = true
+            }
+
+            override fun onExited(event: DragAndDropEvent) {
+                isDragging = false
+            }
+
+            override fun onEnded(event: DragAndDropEvent) {
+                isDragging = false
+            }
+
+            override fun onDrop(event: DragAndDropEvent): Boolean {
+                isDragging = false
+                val transferable = event.awtTransferable
+                if (!transferable.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) return false
+                val files = runCatching {
+                    transferable.getTransferData(DataFlavor.javaFileListFlavor)
+                }.getOrNull() as? List<*>
+                    ?: return false
+                val imports = files.filterIsInstance<File>()
+                val oszFiles = imports.filter { it.extension.equals("osz", ignoreCase = true) }
+                val zipFiles = imports.filter { it.extension.equals("zip", ignoreCase = true) }
+                if (oszFiles.isEmpty() && zipFiles.isEmpty()) {
+                    scope.launch {
+                        snackbarHostState.showSnackbar("Drop .osz or .zip beatmap files to import")
+                    }
+                } else {
+                    oszFiles.forEach { viewModel.importOszFile(it) }
+                    zipFiles.forEach { viewModel.importZipFile(it) }
+                    scope.launch {
+                        snackbarHostState.showSnackbar("Importing ${oszFiles.size + zipFiles.size} beatmap file(s)...")
+                    }
+                }
+                return true
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .dragAndDropTarget(
+                shouldStartDragAndDrop = { event ->
+                    event.awtTransferable.isDataFlavorSupported(DataFlavor.javaFileListFlavor)
+                },
+                target = dropTarget
+            )
+    ) {
+        content()
+        if (isDragging) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(10f),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Drop to import beatmaps",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
         }
