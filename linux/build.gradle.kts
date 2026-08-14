@@ -28,13 +28,13 @@ compose.desktop {
             targetFormats(TargetFormat.AppImage, TargetFormat.Deb)
             packageName = "osu-radio"
             packageVersion = versionProps["VERSION_NAME"].toString()
-            description = "osu!radio - play osu! beatmap songs"
+            description = "Music player that lets you play osu! beatmap songs"
             vendor = "simplyIeaf"
             licenseFile = rootProject.file("../LICENSE")
             modules("java.desktop", "java.logging", "java.xml", "jdk.unsupported", "jdk.crypto.ec")
 
             linux {
-                iconFile.set(rootProject.file("src/main/resources/ic_launcher.png"))
+                iconFile.set(rootProject.file("src/main/resources/ic_app_logo.png"))
                 packageName = "osu-radio"
             }
         }
@@ -56,6 +56,9 @@ dependencies {
     implementation(compose.ui)
     implementation(compose.foundation)
     implementation(compose.animation)
+
+    // Provides Dispatchers.Main on the Swing EDT (matches coroutines-core pulled by Compose).
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.9.0")
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.code.gson:gson:2.11.0")
