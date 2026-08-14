@@ -1,10 +1,10 @@
 package com.osuradio.app.utils
 
+import com.google.gson.JsonParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.TimeUnit
 
@@ -37,14 +37,14 @@ object UpdateChecker {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@withContext null
                 val body = response.body?.string() ?: return@withContext null
-                val json = JSONObject(body)
-                val tag = json.getString("tag_name")
-                val assets = json.getJSONArray("assets")
+                val json = JsonParser.parseString(body).asJsonObject
+                val tag = json.get("tag_name").asString
+                val assets = json.getAsJsonArray("assets")
                 var appImageUrl = ""
-                for (i in 0 until assets.length()) {
-                    val asset = assets.getJSONObject(i)
-                    if (asset.getString("name").endsWith(".AppImage")) {
-                        appImageUrl = asset.getString("browser_download_url")
+                for (i in 0 until assets.size()) {
+                    val asset = assets.get(i).asJsonObject
+                    if (asset.get("name").asString.endsWith(".AppImage")) {
+                        appImageUrl = asset.get("browser_download_url").asString
                         break
                     }
                 }
@@ -52,7 +52,7 @@ object UpdateChecker {
                 ReleaseInfo(
                     tagName = tag,
                     appImageDownloadUrl = appImageUrl,
-                    body = json.optString("body").trim()
+                    body = json.get("body")?.asString?.trim() ?: ""
                 )
             }
         } catch (e: Exception) {
@@ -72,7 +72,7 @@ object UpdateChecker {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@withContext null
                 val body = response.body?.string() ?: return@withContext null
-                JSONObject(body).optString("body").trim().ifEmpty { null }
+                JsonParser.parseString(body).asJsonObject.get("body")?.asString?.trim()?.ifEmpty { null }
             }
         } catch (e: Exception) {
             Logger.error(TAG, "Failed to fetch release notes for v$version", e)

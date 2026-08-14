@@ -90,10 +90,10 @@ class DesktopPlayer(
             try {
                 val decoded = AudioDecoder.decode(File(song.audioPath))
                 val (tempo, pitch) = resolveModParams(modSettings)
-                val rampActive = modSettings.activeMod == SongMod.WIND_UP ||
+                val isRampActive = modSettings.activeMod == SongMod.WIND_UP ||
                         modSettings.activeMod == SongMod.WIND_DOWN
                 // Ramps interpolate live from 1.0 → target, so the buffer must be untouched.
-                val stretched: FloatArray = if (!rampActive && abs(tempo / pitch - 1f) > 0.002f) {
+                val stretched: FloatArray = if (!isRampActive && abs(tempo / pitch - 1f) > 0.002f) {
                     TimeStretcher.stretch(decoded.samples, decoded.channels, decoded.sampleRate, tempo / pitch)
                 } else {
                     decoded.samples
@@ -114,7 +114,7 @@ class DesktopPlayer(
                     rampEnd = when (modSettings.activeMod) {
                         SongMod.WIND_UP -> 1.8
                         SongMod.WIND_DOWN -> 0.6
-                        else -> tempo
+                        else -> tempo.toDouble()
                     }
                     advance = if (rampActive) rampStart else pitch.toDouble()
                     if (rampActive) startRampLocked()
@@ -255,7 +255,7 @@ class DesktopPlayer(
                 rampEnd = when (modSettings.activeMod) {
                     SongMod.WIND_UP -> 1.8
                     SongMod.WIND_DOWN -> 0.6
-                    else -> tempo
+                    else -> tempo.toDouble()
                 }
                 advance = rampStart
                 startRampLocked()
@@ -393,7 +393,7 @@ class DesktopPlayer(
         val eqProcessor = eq
         val gain = loudnessGain
         var out = 0
-        var idx = bufferIndex
+        var idx = bufferIndex.toDouble()
         var written = 0
         val maxFrames = chunk.size / channels
 
@@ -416,7 +416,7 @@ class DesktopPlayer(
         if (v != 1f) {
             for (i in 0 until written * channels) chunk[i] *= v
         }
-        bufferIndex = idx
+        bufferIndex = idx.toLong()
         return written
     }
 

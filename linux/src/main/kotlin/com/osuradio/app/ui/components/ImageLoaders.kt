@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit
 private val imageCache = object {
     private val lock = Any()
     private val map = LinkedHashMap<String, ImageBitmap>(0, 0.75f, true)
-    private const val MAX_ENTRIES = 512
+    private val MAX_ENTRIES = 512
 
     fun get(key: String): ImageBitmap? = synchronized(lock) {
         map[key]?.also { map.remove(key); map[key] = it }

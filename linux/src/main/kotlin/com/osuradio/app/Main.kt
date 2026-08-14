@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -64,7 +65,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
-import androidx.compose.ui.window.exitApplication
 import androidx.compose.ui.window.rememberWindowState
 import androidx.compose.ui.zIndex
 import com.osuradio.app.data.AnimationStyle
@@ -145,8 +145,8 @@ fun MainApp(viewModel: MainViewModel) {
         NavTab("Settings", Icons.Filled.Settings)
     )
 
-    LaunchedEffect(updatePrompt.value) {
-        val prompt = updatePrompt.value ?: return@LaunchedEffect
+    LaunchedEffect(updatePrompt) {
+        val prompt = updatePrompt ?: return@LaunchedEffect
         val result = snackbarHostState.showSnackbar(
             message = "Update available: ${prompt.latestVersion}",
             actionLabel = "Get it",
@@ -158,14 +158,14 @@ fun MainApp(viewModel: MainViewModel) {
         }
     }
 
-    LaunchedEffect(updateDownloading.value) {
-        if (updateDownloading.value) {
-            snackbarHostState.showSnackbar("Downloading update... ${updateProgress.value}%")
+    LaunchedEffect(updateDownloading) {
+        if (updateDownloading) {
+            snackbarHostState.showSnackbar("Downloading update... $updateProgress%")
         }
     }
 
-    LaunchedEffect(updateFailed.value) {
-        if (updateFailed.value) {
+    LaunchedEffect(updateFailed) {
+        if (updateFailed) {
             val result = snackbarHostState.showSnackbar(
                 message = "Update failed to download",
                 actionLabel = "Open",
@@ -178,16 +178,16 @@ fun MainApp(viewModel: MainViewModel) {
         }
     }
 
-    LaunchedEffect(isLoading.value) {
-        if (!isLoading.value) selectedTab = viewModel.settings.value.lastTab
+    LaunchedEffect(isLoading) {
+        if (!isLoading) selectedTab = viewModel.settings.value.lastTab
     }
 
-    if (isLoading.value) {
-        LoadingScreen(message = loadingMessage.value)
+    if (isLoading) {
+        LoadingScreen(message = loadingMessage)
         return
     }
 
-    releaseNotes.value?.let { notes ->
+    releaseNotes?.let { notes ->
         AlertDialog(
             onDismissRequest = { viewModel.dismissReleaseNotes() },
             title = { Text("What's new in v${notes.version}") },
@@ -204,7 +204,7 @@ fun MainApp(viewModel: MainViewModel) {
         )
     }
 
-    val downloadedFile = updateDownloaded.value
+    val downloadedFile = updateDownloaded
     if (downloadedFile != null) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissUpdateDownloaded() },
