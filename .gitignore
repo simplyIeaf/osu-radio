@@ -11,4 +11,7 @@ local.properties
 *.jks
 *.keystore
 !keystore/debug.keystore
+!android/keystore/debug.keystore
 app/build/
+android/app/build/
+linux/build/
