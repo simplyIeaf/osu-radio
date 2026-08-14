@@ -545,8 +545,12 @@ class MainViewModel {
         val newModSettings = ModSettings(activeMod = mod, customSpeed = customSpeed)
         _modSettings.value = newModSettings
         val song = _currentSong.value ?: return
+        val wasPlaying = player.isPlaying()
         val inPlace = player.applyMod(newModSettings)
-        if (!inPlace) player.play(song, newModSettings, _currentPositionMs.value)
+        if (!inPlace) {
+            player.play(song, newModSettings, _currentPositionMs.value)
+            if (!wasPlaying) player.pause()
+        }
     }
 
     // ── Settings ──────────────────────────────────────────────────────────────

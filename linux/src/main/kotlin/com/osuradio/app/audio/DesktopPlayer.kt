@@ -99,9 +99,10 @@ class DesktopPlayer(
                     decoded.samples
                 }
 
-                val startFrame = if (startPositionMs > 0) {
+                val totalFrames = stretched.size / decoded.channels
+                val startFrame = if (startPositionMs > 0 && totalFrames > 0) {
                     (startPositionMs * decoded.sampleRate / 1000.0).toLong()
-                        .coerceIn(0L, (stretched.size / decoded.channels).toLong() - 1L)
+                        .coerceIn(0L, (totalFrames - 1).toLong())
                 } else 0L
 
                 synchronized(lock) {
@@ -225,7 +226,9 @@ class DesktopPlayer(
         synchronized(lock) {
             val buf = buffer ?: return
             val frames = buf.size / channels
-            bufferIndex = (positionMs * sampleRate / 1000.0).toLong().coerceIn(0L, (frames - 1).toLong())
+            bufferIndex = if (frames > 0) {
+                (positionMs * sampleRate / 1000.0).toLong().coerceIn(0L, (frames - 1).toLong())
+            } else 0L
             lock.notifyAll()
         }
     }
@@ -382,7 +385,14 @@ class DesktopPlayer(
                 continue
             }
 
-            writeToLine(chunk, framesToWrite)
+            if (!writeToLine(chunk, framesToWrite)) {
+                // No audio device available — back off so the loop doesn't spin at 100% CPU.
+                try {
+                    Thread.sleep(100)
+                } catch (_: InterruptedException) {
+                    return
+                }
+            }
         }
     }
 
@@ -431,7 +441,7 @@ class DesktopPlayer(
         }
     }
 
-    private fun writeToLine(chunk: FloatArray, frames: Int) {
+    private fun writeToLine(chunk: FloatArray, frames: Int): Boolean {
         try {
             var l = line
             if (l == null || lineRate != sampleRate) {
@@ -464,9 +474,11 @@ class DesktopPlayer(
                 i++
             }
             l.write(bytes, 0, bytes.size)
+            return true
         } catch (e: Exception) {
             // No audio device or audio error — silently keep the timeline moving.
             Logger.warn(TAG, "Audio output unavailable: ${e.message}")
+            return false
         }
     }
 

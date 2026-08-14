@@ -68,7 +68,12 @@ class DownloadManager(
         val task = _downloads.value.find { it.beatmapsetId == beatmapsetId } ?: return
         if (task.status != DownloadStatus.PAUSED && task.status != DownloadStatus.FAILED) return
         updateStatus(beatmapsetId, DownloadStatus.QUEUED, task.progress)
-        scope.launch { pending.send(beatmapsetId) }
+        scope.launch {
+            // Pause cancels asynchronously, so wait for the old worker to fully stop
+            // before re-queuing, otherwise two writers could touch the same temp file.
+            runningJobs[beatmapsetId]?.join()
+            pending.send(beatmapsetId)
+        }
     }
 
     /** Removes the download entirely and deletes any partial file. */
