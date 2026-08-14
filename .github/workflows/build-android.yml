@@ -1,11 +1,14 @@
-name: Build APK
+name: Build Android
 
 on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-android:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
 
     steps:
       - name: Checkout repository
@@ -41,7 +44,7 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          key: ${{ runner.os }}-gradle-android-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: |
             ${{ runner.os }}-gradle-
 
@@ -68,8 +71,8 @@ jobs:
 
       - name: Rename APK
         run: |
-          mkdir -p out
-          cp app/build/outputs/apk/release/app-release.apk out/osu-radio-release-${{ steps.version.outputs.app_version }}-${{ github.sha }}.apk
+          mkdir -p ../out
+          cp app/build/outputs/apk/release/app-release.apk ../out/osu-radio-release-${{ steps.version.outputs.app_version }}-${{ github.sha }}.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
@@ -77,6 +80,11 @@ jobs:
           path: out/osu-radio-release-${{ steps.version.outputs.app_version }}-${{ github.sha }}.apk
           archive: false
           retention-days: 30
+
+      - name: Summarize build
+        run: |
+          echo "### Android build complete" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **APK**: \`out/osu-radio-release-${{ steps.version.outputs.app_version }}-${{ github.sha }}.apk\`" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Remove decoded keystore
         if: always()
