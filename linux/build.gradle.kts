@@ -38,9 +38,6 @@ compose.desktop {
             licenseFile = rootProject.file("../LICENSE")
             modules("java.desktop", "java.logging", "java.xml", "jdk.unsupported", "jdk.crypto.ec")
 
-            appImage {
-                packageVersion = versionProps["VERSION_NAME"].toString()
-            }
             linux {
                 iconFile.set(rootProject.file("src/main/resources/ic_launcher.png"))
                 packageName = "osu-radio"
