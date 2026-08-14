@@ -14,11 +14,6 @@ plugins {
 group = "com.osuradio.app"
 version = versionProps["VERSION_NAME"].toString()
 
-repositories {
-    mavenCentral()
-    google()
-}
-
 val appVersion: String = versionProps["APP_VERSION"].toString()
 
 kotlin {
