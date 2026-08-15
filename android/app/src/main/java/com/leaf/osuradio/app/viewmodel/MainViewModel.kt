@@ -612,6 +612,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         service.applyLoudnessSettings(settings.loudnessNormalization, settings.loudnessGainDb)
     }
 
+    fun updateUiScale(uiScale: Float) {
+        val updated = _settings.value.copy(uiScale = uiScale.coerceIn(0.8f, 1.6f))
+        _settings.value = updated
+        ConfigManager.saveSettings(updated)
+    }
+
     fun toggleShuffle() {
         val newShuffle = !_settings.value.shuffle
         if (newShuffle) {

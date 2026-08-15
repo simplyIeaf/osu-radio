@@ -47,6 +47,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -57,6 +58,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.leaf.osuradio.data.AnimationStyle
 import com.leaf.osuradio.data.Playlist
@@ -107,11 +110,17 @@ class MainActivity : ComponentActivity() {
                 theme = settings.value.theme,
                 colors = settings.value.themeColors
             ) {
-                MainApp(
-                    viewModel = viewModel,
-                    animationStyle = settings.value.animationStyle,
-                    activity = this
-                )
+                val uiScale = settings.value.uiScale.coerceIn(0.8f, 1.6f)
+                val density = LocalDensity.current
+                CompositionLocalProvider(
+                    LocalDensity provides Density(density.density * uiScale, density.fontScale * uiScale)
+                ) {
+                    MainApp(
+                        viewModel = viewModel,
+                        animationStyle = settings.value.animationStyle,
+                        activity = this
+                    )
+                }
             }
         }
 
