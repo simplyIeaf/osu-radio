@@ -1,5 +1,7 @@
-package com.osuradio.app.ui.screens
+package com.leaf.osuradio.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -34,12 +36,14 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -72,18 +76,18 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.osuradio.app.BuildConfig
-import com.osuradio.app.data.AnimationStyle
-import com.osuradio.app.data.AudioTransition
-import com.osuradio.app.data.EqPreset
-import com.osuradio.app.data.ThemeColors
-import com.osuradio.app.ui.components.ScreenHeader
-import com.osuradio.app.viewmodel.MainViewModel
+import com.leaf.osuradio.BuildConfig
+import com.leaf.osuradio.data.AnimationStyle
+import com.leaf.osuradio.data.AudioTransition
+import com.leaf.osuradio.data.EqPreset
+import com.leaf.osuradio.data.ThemeColors
+import com.leaf.osuradio.ui.components.ScreenHeader
+import com.leaf.osuradio.viewmodel.MainViewModel
 
 private val EQ_BAND_LABELS = listOf("Sub\n60Hz", "Bass\n230Hz", "Mid\n910Hz", "Hi\n3.6kHz", "Air\n14kHz")
 
@@ -99,6 +103,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
     val tabs = listOf(
         SettingsTabSpec("General", Icons.Filled.Settings),
         SettingsTabSpec("Audio", Icons.Filled.Equalizer),
+        SettingsTabSpec("Synchronization", Icons.Filled.Sync),
         SettingsTabSpec("About", Icons.Filled.Info)
     )
 
@@ -110,7 +115,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
         PrimaryTabRow(
             selectedTabIndex = selectedTab,
             containerColor = MaterialTheme.colorScheme.background,
-            contentColor = MaterialTheme.colorScheme.onBackground,
+            contentColor = Color.White,
             indicator = {
                 TabRowDefaults.SecondaryIndicator(
                     modifier = Modifier.tabIndicatorOffset(selectedTab),
@@ -168,7 +173,8 @@ fun SettingsScreen(viewModel: MainViewModel) {
                 when (tab) {
                     0 -> GeneralSettingsTab(viewModel)
                     1 -> AudioSettingsTab(viewModel)
-                    2 -> AboutTab()
+                    2 -> SynchronizationSettingsTab(viewModel)
+                    3 -> AboutTab()
                 }
             }
         }
@@ -375,7 +381,7 @@ private fun AudioSettingsTab(viewModel: MainViewModel) {
                         Text(
                             text  = "+${settings.value.loudnessGainDb} dB",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = Color.White,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -393,8 +399,40 @@ private fun AudioSettingsTab(viewModel: MainViewModel) {
 }
 
 @Composable
+private fun SynchronizationSettingsTab(viewModel: MainViewModel) {
+    val context = LocalContext.current
+    val isSyncing = viewModel.isSyncing.collectAsState()
+
+    LazyColumn(
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            SettingsCard(title = "Synchronization") {
+                Button(
+                    onClick = { viewModel.syncSongs(context) },
+                    enabled = !isSyncing.value,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Sync,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                    Text(
+                        text = if (isSyncing.value) "Syncing..." else "osu!droid",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun AboutTab() {
-    val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
     LazyColumn(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -420,7 +458,12 @@ private fun AboutTab() {
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.clickable {
-                            uriHandler.openUri("https://github.com/simplyIeaf")
+                            context.startActivity(
+                                Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse("https://github.com/simplyIeaf")
+                                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
                         }
                     )
                 }
@@ -530,7 +573,7 @@ private fun SettingsDropdown(
             readOnly      = true,
             label         = { Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant) },
             trailingIcon  = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier      = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+            modifier      = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable)
         )
         ExposedDropdownMenu(
             expanded = expanded,

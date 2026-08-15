@@ -30,25 +30,20 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.ArrowBackIosNew
-import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,9 +51,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -79,12 +72,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import com.osuradio.app.data.RepeatMode
 import com.osuradio.app.ui.components.ModsPanel
 import com.osuradio.app.ui.components.OsuImage
 import com.osuradio.app.viewmodel.MainViewModel
-import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -99,10 +90,8 @@ fun PlayerScreen(
     val settings = viewModel.settings.collectAsState()
     val modSettings = viewModel.modSettings.collectAsState()
     val queue = viewModel.queue.collectAsState()
-    val sleepTimerEndAtMs = viewModel.sleepTimerEndAtMs.collectAsState()
 
     var showMods by remember { mutableStateOf(false) }
-    var showSleepTimer by remember { mutableStateOf(false) }
     var showQueueSheet by remember { mutableStateOf(false) }
     val playInteraction = remember { MutableInteractionSource() }
     val playPressed by playInteraction.collectIsPressedAsState()
@@ -176,25 +165,11 @@ fun PlayerScreen(
                             if (!showQueuePanel) {
                                 IconButton(onClick = { showQueueSheet = true }) {
                                     Icon(
-                                        Icons.Filled.QueueMusic,
+                                        Icons.AutoMirrored.Filled.QueueMusic,
                                         contentDescription = "Queue",
                                         tint = MaterialTheme.colorScheme.onBackground
                                     )
                                 }
-                            }
-                            IconButton(onClick = {
-                                if (sleepTimerEndAtMs.value != null) {
-                                    viewModel.cancelSleepTimer()
-                                } else {
-                                    showSleepTimer = true
-                                }
-                            }) {
-                                Icon(
-                                    Icons.Filled.Bedtime,
-                                    contentDescription = "Sleep timer",
-                                    tint = if (sleepTimerEndAtMs.value != null)
-                                        MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground
-                                )
                             }
                             IconButton(onClick = { showMods = true }) {
                                 Icon(
@@ -586,129 +561,6 @@ fun PlayerScreen(
                 }
             }
             Spacer(modifier = Modifier.height(24.dp))
-        }
-    }
-
-    if (showSleepTimer) {
-        val now = Calendar.getInstance()
-        var sleepHour by remember { mutableStateOf(now.get(Calendar.HOUR_OF_DAY)) }
-        var sleepMinute by remember { mutableStateOf(now.get(Calendar.MINUTE)) }
-        var hourMenuOpen by remember { mutableStateOf(false) }
-        var minuteMenuOpen by remember { mutableStateOf(false) }
-        Dialog(onDismissRequest = { showSleepTimer = false }) {
-            Surface(
-                shape = RoundedCornerShape(28.dp),
-                color = MaterialTheme.colorScheme.surface
-            ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "Sleep at",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 16.dp)
-                    )
-                    Row(
-                        modifier = Modifier.padding(top = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Box {
-                            TextButton(onClick = { hourMenuOpen = true }) {
-                                Text(
-                                    text = "%02d".format(sleepHour),
-                                    style = MaterialTheme.typography.titleLarge
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = hourMenuOpen,
-                                onDismissRequest = { hourMenuOpen = false }
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .heightIn(max = 280.dp)
-                                        .verticalScroll(rememberScrollState())
-                                ) {
-                                    (0..23).forEach { hour ->
-                                        DropdownMenuItem(
-                                            text = { Text("%02d".format(hour)) },
-                                            onClick = {
-                                                sleepHour = hour
-                                                hourMenuOpen = false
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        Text(
-                            text = ":",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Box {
-                            TextButton(onClick = { minuteMenuOpen = true }) {
-                                Text(
-                                    text = "%02d".format(sleepMinute),
-                                    style = MaterialTheme.typography.titleLarge
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = minuteMenuOpen,
-                                onDismissRequest = { minuteMenuOpen = false }
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .heightIn(max = 280.dp)
-                                        .verticalScroll(rememberScrollState())
-                                ) {
-                                    (0..59).forEach { minute ->
-                                        DropdownMenuItem(
-                                            text = { Text("%02d".format(minute)) },
-                                            onClick = {
-                                                sleepMinute = minute
-                                                minuteMenuOpen = false
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 16.dp),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        TextButton(onClick = { showSleepTimer = false }) {
-                            Text("Cancel")
-                        }
-                        TextButton(onClick = {
-                            val target = Calendar.getInstance().apply {
-                                set(Calendar.HOUR_OF_DAY, sleepHour)
-                                set(Calendar.MINUTE, sleepMinute)
-                                set(Calendar.SECOND, 0)
-                                set(Calendar.MILLISECOND, 0)
-                            }
-                            if (target.timeInMillis <= System.currentTimeMillis()) {
-                                target.add(Calendar.DAY_OF_YEAR, 1)
-                            }
-                            val minutes = ((target.timeInMillis - System.currentTimeMillis()) / 60_000L)
-                                .toInt()
-                                .coerceAtLeast(1)
-                            viewModel.startSleepTimer(minutes)
-                            showSleepTimer = false
-                        }) {
-                            Text("Start")
-                        }
-                    }
-                }
-            }
         }
     }
 }

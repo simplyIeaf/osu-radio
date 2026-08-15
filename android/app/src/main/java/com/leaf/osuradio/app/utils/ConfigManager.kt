@@ -1,11 +1,11 @@
-package com.osuradio.app.utils
+package com.leaf.osuradio.utils
 
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
-import com.osuradio.app.data.AppSettings
-import com.osuradio.app.data.EqualizerSettings
-import com.osuradio.app.data.Playlist
-import com.osuradio.app.data.ThemeColors
+import com.leaf.osuradio.data.AppSettings
+import com.leaf.osuradio.data.EqualizerSettings
+import com.leaf.osuradio.data.Playlist
+import com.leaf.osuradio.data.ThemeColors
 import java.io.File
 
 object ConfigManager {

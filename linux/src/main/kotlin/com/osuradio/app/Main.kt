@@ -16,6 +16,7 @@ import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -25,9 +26,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -58,9 +59,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.awtTransferable
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
@@ -70,7 +72,6 @@ import com.osuradio.app.data.AnimationStyle
 import com.osuradio.app.data.Playlist
 import com.osuradio.app.ui.components.MiniPlayer
 import com.osuradio.app.ui.screens.DownloadScreen
-import com.osuradio.app.ui.screens.LoadingScreen
 import com.osuradio.app.ui.screens.PlayerScreen
 import com.osuradio.app.ui.screens.PlaylistDetailScreen
 import com.osuradio.app.ui.screens.PlaylistsScreen
@@ -82,6 +83,7 @@ import kotlinx.coroutines.launch
 import java.awt.Desktop
 import java.awt.datatransfer.DataFlavor
 import java.io.File
+import javax.imageio.ImageIO
 
 fun main() {
     System.setProperty("skiko.renderApi", "OPENGL")
@@ -120,7 +122,6 @@ data class NavTab(val label: String, val icon: ImageVector)
 @Composable
 fun MainApp(viewModel: MainViewModel) {
     val isLoading by viewModel.isLoading.collectAsState()
-    val loadingMessage by viewModel.loadingMessage.collectAsState()
     val currentSong by viewModel.currentSong.collectAsState()
     val isPlaying by viewModel.isPlaying.collectAsState()
     val currentPositionMs by viewModel.currentPositionMs.collectAsState()
@@ -140,7 +141,7 @@ fun MainApp(viewModel: MainViewModel) {
 
     val tabs = listOf(
         NavTab("Songs", Icons.Filled.LibraryMusic),
-        NavTab("Playlists", Icons.Filled.PlaylistPlay),
+        NavTab("Playlists", Icons.AutoMirrored.Filled.PlaylistPlay),
         NavTab("Download", Icons.Filled.Download),
         NavTab("Settings", Icons.Filled.Settings)
     )
@@ -180,11 +181,6 @@ fun MainApp(viewModel: MainViewModel) {
 
     LaunchedEffect(isLoading) {
         if (!isLoading) selectedTab = viewModel.settings.value.lastTab
-    }
-
-    if (isLoading) {
-        LoadingScreen(message = loadingMessage)
-        return
     }
 
     releaseNotes?.let { notes ->
@@ -276,13 +272,22 @@ fun MainApp(viewModel: MainViewModel) {
                         modifier = Modifier.fillMaxHeight(),
                         containerColor = MaterialTheme.colorScheme.surface,
                         header = {
-                            Image(
-                                painter = painterResource("ic_app_logo.png"),
-                                contentDescription = "osu!radio",
-                                modifier = Modifier
-                                    .padding(top = 12.dp, bottom = 12.dp)
-                                    .size(40.dp)
-                            )
+                            val logo = rememberAppLogo()
+                            if (logo != null) {
+                                Image(
+                                    bitmap = logo,
+                                    contentDescription = "osu!radio",
+                                    modifier = Modifier
+                                        .padding(top = 12.dp, bottom = 12.dp)
+                                        .size(40.dp)
+                                )
+                            } else {
+                                Spacer(
+                                    modifier = Modifier
+                                        .padding(top = 12.dp, bottom = 12.dp)
+                                        .size(40.dp)
+                                )
+                            }
                         }
                     ) {
                         tabs.forEachIndexed { index, tab ->
@@ -488,4 +493,13 @@ private fun FileDropContainer(
             }
         }
     }
+}
+
+/** Loads the bundled app logo from the classpath once (replaces deprecated painterResource). */
+@Composable
+private fun rememberAppLogo(): ImageBitmap? = remember {
+    runCatching {
+        val stream = object {}.javaClass.getResourceAsStream("/ic_app_logo.png") ?: return@remember null
+        stream.use { ImageIO.read(it) }.toComposeImageBitmap()
+    }.getOrNull()
 }

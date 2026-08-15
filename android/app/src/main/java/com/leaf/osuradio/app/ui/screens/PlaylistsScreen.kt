@@ -1,4 +1,4 @@
-package com.osuradio.app.ui.screens
+package com.leaf.osuradio.ui.screens
 
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -45,9 +45,9 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -68,16 +68,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.osuradio.app.data.Playlist
-import com.osuradio.app.data.Song
-import com.osuradio.app.ui.components.OsuImage
-import com.osuradio.app.ui.components.ScreenHeader
-import com.osuradio.app.viewmodel.MainViewModel
+import coil.compose.AsyncImage
+import com.leaf.osuradio.data.Playlist
+import com.leaf.osuradio.data.Song
+import com.leaf.osuradio.ui.components.ScreenHeader
+import com.leaf.osuradio.viewmodel.MainViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -148,7 +149,7 @@ fun PlaylistsScreen(
                 Icon(
                     imageVector = Icons.Filled.Tune,
                     contentDescription = "Sort and filter playlists",
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = Color.White
                 )
             }
         }
@@ -177,7 +178,7 @@ fun PlaylistsScreen(
             } else {
                 if (settings.value.showAsRaster) {
                     LazyVerticalGrid(
-                        columns = GridCells.Fixed(4),
+                        columns = GridCells.Fixed(2),
                         state = gridState,
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -272,7 +273,7 @@ fun PlaylistsScreen(
             Text(
                 text = "Sort by",
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = Color.White,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp)
             )
@@ -289,7 +290,7 @@ fun PlaylistsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)
-                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable)
                 )
                 ExposedDropdownMenu(
                     expanded = filtersExpanded,
@@ -323,7 +324,7 @@ fun PlaylistsScreen(
                 Text(
                     text = "Show as raster",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = Color.White,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -383,7 +384,7 @@ private fun PlaylistCard(
             if (songs.isNotEmpty()) {
                 val coverSong = songs.firstOrNull { it.imagePath != null }
                 if (coverSong?.imagePath != null) {
-                    OsuImage(
+                    AsyncImage(
                         model = coverSong.imagePath,
                         contentDescription = "Playlist cover",
                         contentScale = ContentScale.Crop,
@@ -397,7 +398,10 @@ private fun PlaylistCard(
                     Box(
                         modifier = Modifier
                             .size(52.dp)
-                            .clip(RoundedCornerShape(8.dp)),
+                            .clip(RoundedCornerShape(8.dp))
+                            .then(
+                                Modifier.clickable(enabled = false, onClick = {})
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(

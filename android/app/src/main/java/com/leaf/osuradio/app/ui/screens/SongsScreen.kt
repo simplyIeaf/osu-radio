@@ -1,7 +1,9 @@
-package com.osuradio.app.ui.screens
+package com.leaf.osuradio.ui.screens
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -47,12 +49,12 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -70,6 +72,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -77,13 +80,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.osuradio.app.data.Playlist
-import com.osuradio.app.data.Song
-import com.osuradio.app.ui.components.OsuImage
-import com.osuradio.app.ui.components.PlayingIndicator
-import com.osuradio.app.ui.components.ScreenHeader
-import com.osuradio.app.ui.components.SongSlot
-import com.osuradio.app.viewmodel.MainViewModel
+import coil.compose.AsyncImage
+import com.leaf.osuradio.data.Playlist
+import com.leaf.osuradio.data.Song
+import com.leaf.osuradio.ui.components.PlayingIndicator
+import com.leaf.osuradio.ui.components.ScreenHeader
+import com.leaf.osuradio.ui.components.SongSlot
+import com.leaf.osuradio.viewmodel.MainViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -173,7 +176,7 @@ fun SongsScreen(
                 Icon(
                     imageVector = Icons.Filled.Tune,
                     contentDescription = "Sort and filter songs",
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = Color.White
                 )
             }
         }
@@ -200,7 +203,7 @@ fun SongsScreen(
             Box(modifier = Modifier.weight(1f)) {
                 if (settings.value.showAsRaster) {
                     LazyVerticalGrid(
-                        columns = GridCells.Fixed(4),
+                        columns = GridCells.Fixed(2),
                         state = gridState,
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -294,7 +297,7 @@ fun SongsScreen(
             Text(
                 text = "Sort by",
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = Color.White,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp)
             )
@@ -311,7 +314,7 @@ fun SongsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)
-                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable)
                 )
                 ExposedDropdownMenu(
                     expanded = filtersExpanded,
@@ -345,7 +348,7 @@ fun SongsScreen(
                 Text(
                     text = "Show as raster",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = Color.White,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -402,7 +405,10 @@ private fun SongTile(
     )
     val scale by animateFloatAsState(
         targetValue = if (pressed) 0.94f else 1f,
-        animationSpec = tween(90),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
         label = "tile_scale"
     )
 
@@ -437,7 +443,7 @@ private fun SongTile(
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
         ) {
             if (song.imagePath != null) {
-                OsuImage(
+                AsyncImage(
                     model = song.imagePath,
                     contentDescription = "Album art",
                     contentScale = ContentScale.Crop,

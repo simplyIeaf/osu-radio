@@ -1,4 +1,4 @@
-package com.osuradio.app.ui.screens
+package com.leaf.osuradio.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -37,7 +37,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -47,16 +46,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.osuradio.app.data.NerinyanBeatmapSet
-import com.osuradio.app.ui.components.DownloadSortPanel
-import com.osuradio.app.ui.components.OsuImage
-import com.osuradio.app.ui.components.ScreenHeader
-import com.osuradio.app.utils.DownloadStatus
-import com.osuradio.app.utils.DownloadTask
-import com.osuradio.app.viewmodel.MainViewModel
+import coil.compose.AsyncImage
+import com.leaf.osuradio.data.NerinyanBeatmapSet
+import com.leaf.osuradio.ui.components.DownloadSortPanel
+import com.leaf.osuradio.ui.components.ScreenHeader
+import com.leaf.osuradio.utils.DownloadStatus
+import com.leaf.osuradio.utils.DownloadTask
+import com.leaf.osuradio.viewmodel.MainViewModel
+import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,13 +80,13 @@ fun DownloadScreen(viewModel: MainViewModel) {
         }
     }
 
-    LaunchedEffect(shouldLoadMore) {
+    androidx.compose.runtime.LaunchedEffect(shouldLoadMore) {
         if (shouldLoadMore) {
             viewModel.loadMoreDownloadResults()
         }
     }
 
-    LaunchedEffect(Unit) {
+    androidx.compose.runtime.LaunchedEffect(Unit) {
         if (results.value.isEmpty()) {
             viewModel.refreshDownloadSearch()
         }
@@ -238,7 +239,7 @@ private fun BeatmapSetCard(
                     .size(28.dp)
                     .align(Alignment.Center)
             )
-            OsuImage(
+            AsyncImage(
                 model = set.covers?.list ?: "https://assets.ppy.sh/beatmaps/${set.id}/covers/list@2x.jpg",
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
@@ -268,10 +269,9 @@ private fun BeatmapSetCard(
                 text = when (status) {
                     null -> "${set.status.capitalized()} • ${set.beatmaps.size} difficulties"
                     DownloadStatus.QUEUED -> "Queued..."
-                    DownloadStatus.DOWNLOADING -> {
-                        val progress = task?.progress
-                        if (progress != null && progress > 0) "Downloading $progress%" else "Downloading"
-                    }
+                    DownloadStatus.DOWNLOADING -> "Downloading ${
+                        task?.progress?.takeIf { it > 0 }?.let { "$it%" } ?: ""
+                    }".trim()
                     DownloadStatus.PAUSED -> "Paused"
                     DownloadStatus.FAILED -> "Download failed"
                     DownloadStatus.COMPLETED -> "Imported to library"
@@ -315,7 +315,7 @@ private fun DownloadCardActions(
             Icon(
                 Icons.Filled.Download,
                 contentDescription = "Download",
-                tint = MaterialTheme.colorScheme.primary
+                tint = Color.White
             )
         }
         DownloadStatus.QUEUED -> IconButton(onClick = onCancel) {

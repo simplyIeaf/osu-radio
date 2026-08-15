@@ -11,11 +11,11 @@ plugins {
 }
 
 android {
-    namespace = "com.osuradio.app"
+    namespace = "com.leaf.osuradio"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.osuradio.app"
+        applicationId = "com.leaf.osuradio"
         minSdk = 26
         targetSdk = 35
         versionCode = versionProps["VERSION_CODE"].toString().toInt()

@@ -4,7 +4,6 @@ import com.osuradio.app.BuildConfig
 import com.osuradio.app.audio.DesktopPlayer
 import com.osuradio.app.data.AppSettings
 import com.osuradio.app.data.AudioTransition
-import com.osuradio.app.data.EqualizerSettings
 import com.osuradio.app.data.ModSettings
 import com.osuradio.app.data.NerinyanBeatmapSet
 import com.osuradio.app.data.Playlist
@@ -33,6 +32,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
+import kotlin.random.Random
 
 data class UpdatePrompt(val latestVersion: String, val appImageUrl: String)
 
@@ -66,9 +66,6 @@ class MainViewModel {
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    private val _loadingMessage = MutableStateFlow("Starting osu!radio...")
-    val loadingMessage: StateFlow<String> = _loadingMessage.asStateFlow()
-
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
@@ -92,10 +89,6 @@ class MainViewModel {
 
     private val _updateFailed = MutableStateFlow(false)
     val updateFailed: StateFlow<Boolean> = _updateFailed.asStateFlow()
-
-    private val _sleepTimerEndAtMs = MutableStateFlow<Long?>(null)
-    val sleepTimerEndAtMs: StateFlow<Long?> = _sleepTimerEndAtMs.asStateFlow()
-    private var sleepTimerJob: Job? = null
 
     private val _isSyncing = MutableStateFlow(false)
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
@@ -154,7 +147,6 @@ class MainViewModel {
     fun release() {
         persistPlaybackState()
         positionUpdaterJob?.cancel()
-        sleepTimerJob?.cancel()
         downloadManager.release()
         player.release()
         scope.cancel()
@@ -171,18 +163,13 @@ class MainViewModel {
                 ConfigManager.init(AppPaths.configDir())
                 prefs = Prefs(AppPaths.prefsFile())
 
-                _loadingMessage.value = "Loading your settings..."
                 _settings.value = ConfigManager.getSettings()
                 _playlists.value = ConfigManager.getPlaylists()
 
-                _loadingMessage.value = "Loading your library..."
                 val existingSongs = SongScanner.loadAlreadyScannedSongs()
                 val newSongs: List<Song>
                 if (_settings.value.syncWithOsuDroid) {
-                    _loadingMessage.value = "Syncing with osu!droid..."
-                    newSongs = SongScanner.scanAndCopySongs { progress ->
-                        _loadingMessage.value = progress
-                    }
+                    newSongs = SongScanner.scanAndCopySongs()
                 } else {
                     newSongs = emptyList()
                 }
@@ -192,7 +179,6 @@ class MainViewModel {
                 newSongs.forEach { allSongsMap[it.id] = it }
                 val allSongs = allSongsMap.values.toList().sortedBy { it.artist }
 
-                _loadingMessage.value = "Preparing your player..."
                 _songs.value = allSongs
                 _queue.value = allSongs
 
@@ -308,8 +294,9 @@ class MainViewModel {
                 existingSongs.forEach { allSongsMap[it.id] = it }
                 newSongs.forEach { allSongsMap[it.id] = it }
                 val allSongs = allSongsMap.values.toList().sortedBy { it.artist }
+                val oldLibrary = _songs.value
                 _songs.value = allSongs
-                if (_queue.value.isEmpty()) _queue.value = allSongs
+                updateQueueAfterLibraryChange(oldLibrary, allSongs)
             } catch (e: Exception) {
                 Logger.error(TAG, "Sync failed", e)
             } finally {
@@ -395,28 +382,6 @@ class MainViewModel {
     fun dismissUpdateDownloaded() { _updateDownloaded.value = null }
 
     fun dismissUpdateFailed() { _updateFailed.value = false }
-
-    // ── Sleep timer ───────────────────────────────────────────────────────────
-
-    fun startSleepTimer(minutes: Int) {
-        sleepTimerJob?.cancel()
-        _sleepTimerEndAtMs.value = System.currentTimeMillis() + minutes * 60_000L
-        sleepTimerJob = scope.launch {
-            delay(minutes * 60_000L)
-            pausePlayback()
-            _sleepTimerEndAtMs.value = null
-        }
-    }
-
-    fun cancelSleepTimer() {
-        sleepTimerJob?.cancel()
-        _sleepTimerEndAtMs.value = null
-    }
-
-    fun pausePlayback() {
-        player.pause()
-        _isPlaying.value = false
-    }
 
     // ── Download ──────────────────────────────────────────────────────────────
 
@@ -551,10 +516,10 @@ class MainViewModel {
         _modSettings.value = newModSettings
         val song = _currentSong.value ?: return
         val wasPlaying = player.isPlaying()
-        val inPlace = player.applyMod(newModSettings)
-        if (!inPlace) {
-            player.play(song, newModSettings, _currentPositionMs.value)
-            if (!wasPlaying) player.pause()
+        if (!player.applyMod(newModSettings)) {
+            // Restretch needed: reload the song at the same position, but only
+            // start playing if it was playing before, so a paused user stays paused.
+            player.play(song, newModSettings, _currentPositionMs.value, startPlaying = wasPlaying)
         }
     }
 
@@ -564,7 +529,7 @@ class MainViewModel {
         _settings.value = settings
         ConfigManager.saveSettings(settings)
         player.setVolume(settings.volume)
-        val eq = settings.equalizerSettings ?: EqualizerSettings()
+        val eq = settings.equalizerSettings
         player.setEqualizer(eq.enabled, eq.bandLevels)
         player.setLoudness(settings.loudnessNormalization, settings.loudnessGainDb)
     }
@@ -684,8 +649,33 @@ class MainViewModel {
 
     private fun mergeSong(song: Song) {
         if (_songs.value.none { it.id == song.id }) {
-            _songs.value = (_songs.value + song).sortedBy { it.artist }
-            if (_queue.value.isEmpty()) _queue.value = _songs.value
+            val oldLibrary = _songs.value
+            _songs.value = (oldLibrary + song).sortedBy { it.artist }
+            updateQueueAfterLibraryChange(oldLibrary, _songs.value)
+        }
+    }
+
+    /**
+     * Keeps the queue in sync with the library after songs are added or removed.
+     * Only touches the queue when it currently mirrors the full library (a playlist
+     * queue is left alone). In shuffle mode the existing order is preserved and new
+     * songs are inserted at a random position instead of breaking the shuffle.
+     */
+    private fun updateQueueAfterLibraryChange(oldLibrary: List<Song>, newLibrary: List<Song>) {
+        val oldQueue = _queue.value
+        if (oldQueue.isEmpty()) {
+            _queue.value = newLibrary
+            return
+        }
+        if (oldQueue.toSet() != oldLibrary.toSet()) return
+        val added = newLibrary.filter { song -> oldLibrary.none { it.id == song.id } }
+        if (added.isEmpty()) return
+        _queue.value = if (_settings.value.shuffle) {
+            val shuffled = oldQueue.toMutableList()
+            added.forEach { shuffled.add(Random.nextInt(shuffled.size + 1), it) }
+            shuffled
+        } else {
+            newLibrary
         }
     }
 }

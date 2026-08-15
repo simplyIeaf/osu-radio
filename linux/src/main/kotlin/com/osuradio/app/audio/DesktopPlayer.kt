@@ -30,7 +30,7 @@ class DesktopPlayer(
     }
 
     private val TAG = "DesktopPlayer"
-    private val lock = Object()
+    private val lock = Any()
 
     private var listener: Listener? = null
 
@@ -79,8 +79,13 @@ class DesktopPlayer(
 
     // ── Public control API ────────────────────────────────────────────────────
 
-    /** Decodes + stretches a song and starts playing it from [startPositionMs]. */
-    fun play(song: Song, modSettings: ModSettings, startPositionMs: Long = 0L) {
+    /**
+     * Decodes + stretches a song and starts playing it from [startPositionMs].
+     * When [startPlaying] is false the song is loaded and paused, so a paused
+     * listener can change to a mod that needs a re-stretch without playback
+     * starting on its own once the decode finishes.
+     */
+    fun play(song: Song, modSettings: ModSettings, startPositionMs: Long = 0L, startPlaying: Boolean = true) {
         synchronized(lock) {
             currentSongId = song.id
             stopped = false
@@ -123,18 +128,26 @@ class DesktopPlayer(
                     eq?.setEnabled(eqEnabled)
                     eq?.setBandLevels(eqLevels)
                     loudnessGain = if (loudnessEnabled) Math.pow(10.0, loudnessGainDb / 20.0).toFloat() else 1f
-                    playing = true
                     endedNotified = false
-                    // Fade in from silence.
-                    volumeGoal = baseVolume
-                    fadeStartVolume = 0f
-                    currentVolume = 0f
-                    fadeActive = true
-                    fadeSteps = 12
-                    fadeCounter = 0
+                    if (startPlaying) {
+                        playing = true
+                        // Fade in from silence.
+                        volumeGoal = baseVolume
+                        fadeStartVolume = 0f
+                        currentVolume = 0f
+                        fadeActive = true
+                        fadeSteps = 12
+                        fadeCounter = 0
+                    } else {
+                        playing = false
+                        currentVolume = 0f
+                        volumeGoal = 0f
+                        fadeActive = false
+                    }
                     lock.notifyAll()
                 }
                 ensureThread()
+                if (startPlaying) scope.launch { listener?.onIsPlayingChanged(true) }
             } catch (e: Exception) {
                 Logger.error(TAG, "Failed to prepare ${song.title}", e)
                 synchronized(lock) {
