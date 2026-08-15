@@ -84,7 +84,7 @@ jobs:
 
           cat > "$APP_NAME.AppDir/$APP_NAME.desktop" <<EOF
           [Desktop Entry]
-          Name=osu!radio
+          Name=osu-radio
           Exec=$APP_NAME
           Icon=$APP_NAME
           Type=Application
