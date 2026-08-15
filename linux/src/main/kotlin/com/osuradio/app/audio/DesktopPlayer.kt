@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import java.io.File
 import javax.sound.sampled.AudioFormat
 import javax.sound.sampled.AudioSystem
+import javax.sound.sampled.Mixer
 import javax.sound.sampled.SourceDataLine
 import kotlin.math.abs
 
@@ -68,12 +69,28 @@ class DesktopPlayer(
 
     private var line: SourceDataLine? = null
     private var lineRate = 0f
+    @Volatile private var outputMixer: Mixer.Info? = null
 
     private var rampJob: Job? = null
     private var endedNotified = false
 
     fun setListener(listener: Listener?) {
         synchronized(lock) { this.listener = listener }
+    }
+
+    fun configureAudioOutput(deviceId: String, compatibility: Boolean) {
+        val resolved = when {
+            compatibility -> AudioDevices.compatibleMixer()
+            deviceId.isNotEmpty() -> AudioDevices.byId(deviceId)
+            else -> null
+        }
+        synchronized(lock) {
+            outputMixer = resolved
+            line?.stop()
+            line?.close()
+            line = null
+            lineRate = 0f
+        }
     }
 
     fun isLoaded(): Boolean = synchronized(lock) { buffer != null }
@@ -476,7 +493,13 @@ class DesktopPlayer(
                     sampleRate,
                     false
                 )
-                l = AudioSystem.getSourceDataLine(format)
+                val mixer = outputMixer
+                l = try {
+                    if (mixer != null) AudioSystem.getSourceDataLine(format, mixer)
+                    else AudioSystem.getSourceDataLine(format)
+                } catch (_: Exception) {
+                    AudioSystem.getSourceDataLine(format)
+                }
                 l.open(format, 4096)
                 l.start()
                 synchronized(lock) {

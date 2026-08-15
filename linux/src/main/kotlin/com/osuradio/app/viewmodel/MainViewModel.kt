@@ -164,6 +164,10 @@ class MainViewModel {
                 prefs = Prefs(AppPaths.prefsFile())
 
                 _settings.value = ConfigManager.getSettings()
+                player.configureAudioOutput(
+                    _settings.value.audioOutputDevice,
+                    _settings.value.audioCompatibility
+                )
                 _playlists.value = ConfigManager.getPlaylists()
 
                 val existingSongs = SongScanner.loadAlreadyScannedSongs()
@@ -526,12 +530,16 @@ class MainViewModel {
     // ── Settings ──────────────────────────────────────────────────────────────
 
     fun updateSettings(settings: AppSettings) {
+        val prev = _settings.value
         _settings.value = settings
         ConfigManager.saveSettings(settings)
         player.setVolume(settings.volume)
         val eq = settings.equalizerSettings
         player.setEqualizer(eq.enabled, eq.bandLevels)
         player.setLoudness(settings.loudnessNormalization, settings.loudnessGainDb)
+        if (prev.audioOutputDevice != settings.audioOutputDevice || prev.audioCompatibility != settings.audioCompatibility) {
+            player.configureAudioOutput(settings.audioOutputDevice, settings.audioCompatibility)
+        }
     }
 
     fun updateUiScale(uiScale: Float) {

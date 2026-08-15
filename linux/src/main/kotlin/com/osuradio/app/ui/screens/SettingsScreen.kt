@@ -1,5 +1,6 @@
 package com.osuradio.app.ui.screens
 
+import com.osuradio.app.audio.AudioDevices
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -302,6 +303,7 @@ private fun GeneralSettingsTab(viewModel: MainViewModel) {
 private fun AudioSettingsTab(viewModel: MainViewModel) {
     val settings = viewModel.settings.collectAsState()
     val eq = settings.value.equalizerSettings
+    val devices = remember { AudioDevices.list() }
 
     val transitionLabels = mapOf(
         AudioTransition.NONE        to "None",
@@ -327,6 +329,30 @@ private fun AudioSettingsTab(viewModel: MainViewModel) {
                             )
                         )
                     }
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+
+                val deviceId = settings.value.audioOutputDevice
+                val deviceOptions = listOf("System Default") + devices.map { it.label }
+                val selectedDevice = if (deviceId.isEmpty()) "System Default"
+                    else devices.firstOrNull { it.id == deviceId }?.label ?: "System Default"
+                SettingsDropdown(
+                    label    = "Audio Output",
+                    selected = selectedDevice,
+                    options  = deviceOptions,
+                    onSelect = { label ->
+                        val id = if (label == "System Default") ""
+                            else devices.firstOrNull { it.label == label }?.id ?: ""
+                        viewModel.updateSettings(settings.value.copy(audioOutputDevice = id))
+                    }
+                )
+
+                SettingsToggle(
+                    title    = "Audio Compatibility",
+                    subtitle = "Use the legacy Java Sound engine that works on most systems",
+                    checked  = settings.value.audioCompatibility,
+                    onChange = { viewModel.updateSettings(settings.value.copy(audioCompatibility = it)) }
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))

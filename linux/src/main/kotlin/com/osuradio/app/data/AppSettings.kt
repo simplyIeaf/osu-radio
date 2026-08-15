@@ -51,6 +51,8 @@ data class AppSettings(
     val equalizerSettings: EqualizerSettings = EqualizerSettings(),
     val loudnessNormalization: Boolean = false,
     val loudnessGainDb: Int = 3,
+    val audioOutputDevice: String = "",
+    val audioCompatibility: Boolean = false,
     val showAsRaster: Boolean = false,
     val lastTab: Int = 0,
     val uiScale: Float = 1f
