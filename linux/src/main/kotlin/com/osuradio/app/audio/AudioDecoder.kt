@@ -60,28 +60,33 @@ object AudioDecoder {
             format.isBigEndian
         ) AudioSystem.getAudioInputStream(target, base) else base
 
-        val bytes = stream.readAllBytes()
-        stream.close()
-        val channels = target.channels
-        val sampleRate = target.sampleRate
-        val frameCount = bytes.size / (channels * 2)
-        val samples = FloatArray(frameCount * channels)
-        var i = 0
-        var out = 0
-        for (frame in 0 until frameCount) {
-            for (c in 0 until channels) {
-                val lo = bytes[i].toInt() and 0xFF
-                val hi = bytes[i + 1].toInt()
-                i += 2
-                val sample = (hi shl 8 or lo).toShort().toFloat() / 32768f
-                samples[out++] = sample
+        return stream.use {
+            val channels = target.channels
+            val sampleRate = target.sampleRate
+            val byteBuf = ByteArray(64 * 1024)
+            var floats = FloatArray(1 shl 20)
+            var size = 0
+            while (true) {
+                val n = it.read(byteBuf)
+                if (n <= 0) break
+                var i = 0
+                while (i + 1 < n) {
+                    val lo = byteBuf[i].toInt() and 0xFF
+                    val hi = byteBuf[i + 1].toInt()
+                    i += 2
+                    if (size == floats.size) floats = floats.copyOf(floats.size shl 1)
+                    floats[size++] = (hi shl 8 or lo).toShort().toFloat() / 32768f
+                }
             }
+            val samples = if (size == floats.size) floats else floats.copyOf(size)
+            Decoded(
+                samples = samples,
+                channels = channels,
+                sampleRate = sampleRate,
+                durationMs = if (sampleRate > 0f) {
+                    (size / channels) * 1000L / sampleRate.toLong()
+                } else 0L
+            )
         }
-        return Decoded(
-            samples = samples,
-            channels = channels,
-            sampleRate = sampleRate,
-            durationMs = if (sampleRate > 0f) (frameCount * 1000.0 / sampleRate).toLong() else 0L
-        )
     }
 }

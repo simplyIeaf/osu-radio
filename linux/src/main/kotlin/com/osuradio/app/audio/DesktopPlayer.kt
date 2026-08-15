@@ -35,6 +35,7 @@ class DesktopPlayer(
     private var listener: Listener? = null
 
     private var buffer: FloatArray? = null
+    private var bufferStretch = 1f
     private var channels = 2
     private var sampleRate = 44100f
     private var bufferIndex = 0L               // current read position in frames
@@ -97,9 +98,9 @@ class DesktopPlayer(
                 val (tempo, pitch) = resolveModParams(modSettings)
                 val isRampActive = modSettings.activeMod == SongMod.WIND_UP ||
                         modSettings.activeMod == SongMod.WIND_DOWN
-                // Ramps interpolate live from 1.0 → target, so the buffer must be untouched.
-                val stretched: FloatArray = if (!isRampActive && abs(tempo / pitch - 1f) > 0.002f) {
-                    TimeStretcher.stretch(decoded.samples, decoded.channels, decoded.sampleRate, tempo / pitch)
+                val stretchRatio = if (isRampActive) 1f else tempo / pitch
+                val stretched: FloatArray = if (!isRampActive && abs(stretchRatio - 1f) > 0.002f) {
+                    TimeStretcher.stretch(decoded.samples, decoded.channels, decoded.sampleRate, stretchRatio)
                 } else {
                     decoded.samples
                 }
@@ -112,6 +113,7 @@ class DesktopPlayer(
 
                 synchronized(lock) {
                     buffer = stretched
+                    bufferStretch = stretchRatio
                     channels = decoded.channels
                     sampleRate = decoded.sampleRate
                     bufferIndex = startFrame.coerceAtLeast(0L)
@@ -264,9 +266,9 @@ class DesktopPlayer(
         synchronized(lock) {
             rampJob?.cancel()
             val (tempo, pitch) = resolveModParams(modSettings)
-            val needsRestretch = abs(tempo / pitch - 1f) > 0.002f
             rampActive = modSettings.activeMod == SongMod.WIND_UP || modSettings.activeMod == SongMod.WIND_DOWN
             if (rampActive) {
+                if (abs(bufferStretch - 1f) > 0.002f) return false
                 rampStart = 1.0
                 rampEnd = when (modSettings.activeMod) {
                     SongMod.WIND_UP -> 1.8
@@ -276,7 +278,9 @@ class DesktopPlayer(
                 advance = rampStart
                 startRampLocked()
                 return true
-            } else if (!needsRestretch) {
+            }
+            val targetStretch = tempo / pitch
+            if (abs(targetStretch - bufferStretch) <= 0.002f) {
                 advance = pitch.toDouble()
                 return true
             }
@@ -307,6 +311,7 @@ class DesktopPlayer(
             stopped = true
             playing = false
             buffer = null
+            bufferStretch = 1f
             currentSongId = null
             rampJob?.cancel()
             lock.notifyAll()

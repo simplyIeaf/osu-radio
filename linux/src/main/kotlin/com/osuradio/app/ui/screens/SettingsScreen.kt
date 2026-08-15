@@ -60,6 +60,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -84,6 +85,9 @@ import com.osuradio.app.data.EqPreset
 import com.osuradio.app.data.ThemeColors
 import com.osuradio.app.ui.components.ScreenHeader
 import com.osuradio.app.viewmodel.MainViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private val EQ_BAND_LABELS = listOf("Sub\n60Hz", "Bass\n230Hz", "Mid\n910Hz", "Hi\n3.6kHz", "Air\n14kHz")
 
@@ -211,6 +215,36 @@ private fun GeneralSettingsTab(viewModel: MainViewModel) {
                     subtitle = "Checks on app start (takes effect after restart)",
                     checked  = settings.value.autoCheckUpdates,
                     onChange = { viewModel.updateSettings(settings.value.copy(autoCheckUpdates = it)) }
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                var pendingScale by remember { mutableFloatStateOf(settings.value.uiScale) }
+                val scope = rememberCoroutineScope()
+                var applyJob by remember { mutableStateOf<Job?>(null) }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("UI Scale", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                    Text(
+                        String.format("%.2fx", pendingScale),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Slider(
+                    value = pendingScale,
+                    onValueChange = { newValue ->
+                        pendingScale = newValue
+                        applyJob?.cancel()
+                        applyJob = scope.launch {
+                            delay(1000)
+                            viewModel.updateUiScale(newValue)
+                        }
+                    },
+                    valueRange = 0.8f..1.6f,
+                    steps = 7
                 )
             }
         }
