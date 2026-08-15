@@ -83,7 +83,7 @@ class DesktopPlayer(
         val resolved = when {
             compatibility -> AudioDevices.compatibleMixer()
             deviceId.isNotEmpty() -> AudioDevices.byId(deviceId)
-            else -> null
+            else -> AudioDevices.modernMixer()
         }
         synchronized(lock) {
             outputMixer = resolved
@@ -116,7 +116,7 @@ class DesktopPlayer(
                 val (tempo, pitch) = resolveModParams(modSettings)
                 val isRampActive = modSettings.activeMod == SongMod.WIND_UP ||
                         modSettings.activeMod == SongMod.WIND_DOWN
-                val stretchRatio = if (isRampActive) 1f else tempo / pitch
+                val stretchRatio = if (isRampActive) 1f else pitch / tempo
                 val stretched: FloatArray = if (!isRampActive && abs(stretchRatio - 1f) > 0.002f) {
                     TimeStretcher.stretch(decoded.samples, decoded.channels, decoded.sampleRate, stretchRatio)
                 } else {
@@ -298,7 +298,7 @@ class DesktopPlayer(
                 startRampLocked()
                 return true
             }
-            val targetStretch = tempo / pitch
+            val targetStretch = pitch / tempo
             if (abs(targetStretch - bufferStretch) <= 0.002f) {
                 advance = pitch.toDouble()
                 return true

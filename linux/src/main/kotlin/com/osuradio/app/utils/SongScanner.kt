@@ -1,5 +1,6 @@
 package com.osuradio.app.utils
 
+import com.osuradio.app.audio.AudioConverter
 import com.osuradio.app.audio.AudioDecoder
 import com.osuradio.app.data.Song
 import java.io.File
@@ -51,7 +52,7 @@ object SongScanner {
         val (artist, title) = parseFolderName(folder.name)
 
         val audioFiles = folder.listFiles()?.filter { file ->
-            (file.extension.lowercase() == "mp3" || file.extension.lowercase() == "ogg") &&
+            AudioConverter.isConvertible(file) &&
                     !EXCLUDED_PREFIXES.any { file.name.lowercase().startsWith(it) }
         } ?: emptyList()
 
@@ -74,6 +75,9 @@ object SongScanner {
         val destAudio = File(outputFolder, audioFile.name)
         if (!destAudio.exists()) audioFile.copyTo(destAudio, overwrite = true)
 
+        val finalAudio = AudioConverter.ensureMp3(destAudio)
+        if (!AudioConverter.isDecodable(finalAudio)) return null
+
         var destImagePath: String? = null
         if (selectedImage != null) {
             val destImage = File(outputFolder, selectedImage.name)
@@ -81,13 +85,13 @@ object SongScanner {
             destImagePath = destImage.absolutePath
         }
 
-        val duration = getAudioDuration(destAudio)
+        val duration = getAudioDuration(finalAudio)
 
         return Song(
             id = UUID.nameUUIDFromBytes(folder.name.toByteArray()).toString(),
             title = title,
             artist = artist,
-            audioPath = destAudio.absolutePath,
+            audioPath = finalAudio.absolutePath,
             imagePath = destImagePath,
             folderPath = outputFolder.absolutePath,
             duration = duration
@@ -130,7 +134,7 @@ object SongScanner {
 
     private fun loadSongFromOutputFolder(folder: File): Song? {
         val audioFile = folder.listFiles()?.filter { file ->
-            (file.extension.lowercase() == "mp3" || file.extension.lowercase() == "ogg") &&
+            AudioConverter.isDecodable(file) &&
                     !EXCLUDED_PREFIXES.any { file.name.lowercase().startsWith(it) }
         }?.maxByOrNull { it.length() } ?: return null
 

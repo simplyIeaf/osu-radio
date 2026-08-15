@@ -188,8 +188,7 @@ fun SongsScreen(
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
                     Text(
-                        text = if (searchQuery.value.isNotEmpty()) "No songs found"
-                        else "No songs found\nMake sure osu!droid is installed\nwith songs in the Songs folder",
+                        text = "No songs found",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center

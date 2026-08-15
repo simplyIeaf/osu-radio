@@ -43,9 +43,22 @@ object AudioDevices {
         null
     }
 
+    fun modernMixer(): Mixer.Info? = try {
+        val infos = AudioSystem.getMixerInfo()
+        infos.firstOrNull { it.isSystemDefaultAlsa() && !it.isLegacyEngine() }
+            ?: infos.firstOrNull { it.isDirectAlsa() && !it.isLegacyEngine() }
+    } catch (_: Exception) {
+        null
+    }
+
     private fun Mixer.Info.isLegacyEngine(): Boolean =
         name.contains("Java Sound Audio Engine") || vendor.contains("Java Sound Audio Engine")
 
     private fun Mixer.Info.isSystemDefaultAlsa(): Boolean =
         name.contains("[default]") || name.contains("alsa_playback") || name.contains("default")
+
+    private fun Mixer.Info.isDirectAlsa(): Boolean =
+        name.contains("Direct Audio Device") || description.contains("Direct Audio Device") ||
+                name.contains("plughw") || name.contains("ALSA") || name.contains("PulseAudio") ||
+                vendor.contains("ALSA")
 }

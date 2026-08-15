@@ -1,5 +1,6 @@
 package com.osuradio.app.utils
 
+import com.osuradio.app.audio.AudioConverter
 import com.osuradio.app.audio.AudioDecoder
 import com.osuradio.app.data.Song
 import java.io.File
@@ -33,7 +34,7 @@ object OszImporter {
                         val isExcluded = EXCLUDED_PREFIXES.any { entryName.lowercase().startsWith(it) }
 
                         when {
-                            !isExcluded && (ext == "mp3" || ext == "ogg") -> {
+                            !isExcluded && AudioConverter.isConvertible(ext) -> {
                                 val destFile = File(outputFolder, entryName)
                                 destFile.outputStream().use { out -> zip.copyTo(out) }
                                 audioFiles.add(destFile)
@@ -55,6 +56,11 @@ object OszImporter {
                 outputFolder.deleteRecursively()
                 return null
             }
+            val finalAudio = AudioConverter.ensureMp3(audioFile)
+            if (!AudioConverter.isDecodable(finalAudio)) {
+                outputFolder.deleteRecursively()
+                return null
+            }
             val selectedImage = imageFiles.maxByOrNull { it.length() }
             val (artist, title) = SongScanner.parseFolderName(baseName)
 
@@ -62,10 +68,10 @@ object OszImporter {
                 id = UUID.nameUUIDFromBytes(baseName.toByteArray()).toString(),
                 title = title,
                 artist = artist,
-                audioPath = audioFile.absolutePath,
+                audioPath = finalAudio.absolutePath,
                 imagePath = selectedImage?.absolutePath,
                 folderPath = outputFolder.absolutePath,
-                duration = AudioDecoder.durationOf(audioFile)
+                duration = AudioDecoder.durationOf(finalAudio)
             )
         } catch (e: Exception) {
             Logger.error(TAG, "Failed to import downloaded beatmapset", e)
@@ -97,7 +103,7 @@ object OszImporter {
                         outputFolder.mkdirs()
 
                         when {
-                            !isExcluded && (ext == "mp3" || ext == "ogg") -> {
+                            !isExcluded && AudioConverter.isConvertible(ext) -> {
                                 val destFile = File(outputFolder, fileName)
                                 destFile.outputStream().use { out -> zip.copyTo(out) }
                                 folderAudioMap.getOrPut(folderName) { mutableListOf() }.add(destFile)
@@ -117,6 +123,8 @@ object OszImporter {
 
             folderAudioMap.forEach { (folderName, audioFiles) ->
                 val audioFile = audioFiles.maxByOrNull { it.length() } ?: return@forEach
+                val finalAudio = AudioConverter.ensureMp3(audioFile)
+                if (!AudioConverter.isDecodable(finalAudio)) return@forEach
                 val imageFile = folderImageMap[folderName]?.maxByOrNull { it.length() }
                 val (artist, title) = SongScanner.parseFolderName(folderName)
                 onProgress("Imported: $title")
@@ -125,10 +133,10 @@ object OszImporter {
                         id = UUID.nameUUIDFromBytes(folderName.toByteArray()).toString(),
                         title = title,
                         artist = artist,
-                        audioPath = audioFile.absolutePath,
+                        audioPath = finalAudio.absolutePath,
                         imagePath = imageFile?.absolutePath,
                         folderPath = File(outputSongsDir, folderName).absolutePath,
-                        duration = AudioDecoder.durationOf(audioFile)
+                        duration = AudioDecoder.durationOf(finalAudio)
                     )
                 )
             }
