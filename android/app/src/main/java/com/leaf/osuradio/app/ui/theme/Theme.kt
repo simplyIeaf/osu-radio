@@ -5,6 +5,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import com.leaf.osuradio.data.AppFont
 import com.leaf.osuradio.data.AppTheme
 import com.leaf.osuradio.data.ThemeColors
@@ -39,9 +40,10 @@ fun OsuRadioTheme(
     fontSize: Float = 1f,
     content: @Composable () -> Unit
 ) {
+    val assets = LocalContext.current.assets
     MaterialTheme(
         colorScheme = getColorScheme(theme, colors),
-        typography = appTypography(font.toFontFamily(), fontSize),
+        typography = appTypography(font.toFontFamily(assets), fontSize),
         content = content
     )
 }

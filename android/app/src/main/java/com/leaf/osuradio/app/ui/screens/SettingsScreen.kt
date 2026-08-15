@@ -192,6 +192,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
 @Composable
 private fun GeneralSettingsTab(viewModel: MainViewModel) {
     val settings = viewModel.settings.collectAsState()
+    val assets = LocalContext.current.assets
 
     val animationLabels = mapOf(
         AnimationStyle.SLIDE to "Slide",
@@ -231,7 +232,7 @@ private fun GeneralSettingsTab(viewModel: MainViewModel) {
                     },
                     optionStyle = { label ->
                         TextStyle(
-                            fontFamily = AppFont.entries.first { it.label == label }.toFontFamily(),
+                            fontFamily = AppFont.entries.first { it.label == label }.toFontFamily(assets),
                             fontSize = MaterialTheme.typography.bodyMedium.fontSize
                         )
                     }
@@ -632,7 +633,7 @@ private fun SettingsDropdown(
     selected: String,
     options: List<String>,
     onSelect: (String) -> Unit,
-    optionStyle: (String) -> TextStyle = { MaterialTheme.typography.bodyMedium }
+    optionStyle: @Composable (String) -> TextStyle? = null
 ) {
     var expanded by remember { mutableStateOf(false) }
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
@@ -651,7 +652,7 @@ private fun SettingsDropdown(
         ) {
             options.forEach { option ->
                 DropdownMenuItem(
-                    text    = { Text(option, style = optionStyle(option)) },
+                    text    = { Text(option, style = optionStyle?.invoke(option) ?: MaterialTheme.typography.bodyMedium) },
                     onClick = { expanded = false; onSelect(option) }
                 )
             }

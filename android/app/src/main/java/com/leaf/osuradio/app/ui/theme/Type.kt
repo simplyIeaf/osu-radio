@@ -1,5 +1,6 @@
 package com.leaf.osuradio.ui.theme
 
+import android.content.res.AssetManager
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
@@ -9,10 +10,10 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import com.leaf.osuradio.data.AppFont
 
-fun AppFont.toFontFamily(): FontFamily {
+fun AppFont.toFontFamily(assetManager: AssetManager): FontFamily {
     if (this == AppFont.DEFAULT) return FontFamily.Default
-    val regular = Font("fonts/$regular", FontWeight.Normal)
-    val bold = bold?.let { Font("fonts/$it", FontWeight.Bold) } ?: regular
+    val regular = Font("fonts/$regular", assetManager, FontWeight.Normal)
+    val bold = bold?.let { Font("fonts/$it", assetManager, FontWeight.Bold) } ?: regular
     return FontFamily(regular, bold)
 }
 
