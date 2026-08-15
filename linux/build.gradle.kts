@@ -100,7 +100,7 @@ val downloadFfmpeg = tasks.register("downloadFfmpeg") {
             val extracted = bin.parentFile.listFiles()
                 ?.firstOrNull { it.isDirectory && it.name.startsWith("ffmpeg-") }
                 ?: error("ffmpeg archive did not contain an ffmpeg directory")
-            val ffmpeg = extracted.resolve("ffmpeg")
+            val ffmpeg = extracted.resolve("bin").resolve("ffmpeg")
             check(ffmpeg.isFile) { "ffmpeg binary not found in archive" }
             ffmpeg.copyTo(bin, overwrite = true)
             bin.setExecutable(true)
