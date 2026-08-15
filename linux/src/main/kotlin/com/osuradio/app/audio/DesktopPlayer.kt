@@ -420,7 +420,7 @@ class DesktopPlayer(
                 continue
             }
 
-            val chunkNs = framesToWrite.toLong() * 1000000000L / sampleRate
+            val chunkNs = framesToWrite.toLong() * 1000000000L / sampleRate.toLong()
             val t0 = System.nanoTime()
             writeToLine(chunk, framesToWrite)
             val remainingNs = chunkNs - (System.nanoTime() - t0)
