@@ -617,7 +617,7 @@ private fun SettingsDropdown(
     selected: String,
     options: List<String>,
     onSelect: (String) -> Unit,
-    optionStyle: @Composable (String) -> TextStyle? = null
+    optionStyle: (@Composable (String) -> TextStyle)? = null
 ) {
     var expanded by remember { mutableStateOf(false) }
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
