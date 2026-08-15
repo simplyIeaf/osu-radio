@@ -127,17 +127,31 @@ class MainViewModel {
     private var restoreSongId: String? = null
     private var restorePositionMs = 0L
 
+    private var consecutivePlayFailures = 0
+
     private var prefs: Prefs? = null
 
     init {
         player.setListener(object : DesktopPlayer.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 _isPlaying.value = isPlaying
+                if (isPlaying) consecutivePlayFailures = 0
                 if (!isPlaying) persistPlaybackState()
             }
 
             override fun onSongEnded() {
                 _isPlaying.value = false
+                handleQueueEnded()
+            }
+
+            override fun onPlaybackFailed() {
+                consecutivePlayFailures++
+                _isPlaying.value = false
+                if (consecutivePlayFailures >= 3) {
+                    Logger.warn(TAG, "Stopping playback after $consecutivePlayFailures consecutive unplayable tracks")
+                    persistPlaybackState()
+                    return
+                }
                 handleQueueEnded()
             }
         })

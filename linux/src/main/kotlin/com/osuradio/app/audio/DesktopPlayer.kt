@@ -28,6 +28,7 @@ class DesktopPlayer(
     interface Listener {
         fun onIsPlayingChanged(isPlaying: Boolean)
         fun onSongEnded()
+        fun onPlaybackFailed()
     }
 
     private val TAG = "DesktopPlayer"
@@ -173,6 +174,7 @@ class DesktopPlayer(
                     playing = false
                     lock.notifyAll()
                 }
+                listener?.onPlaybackFailed()
             }
         }
     }
