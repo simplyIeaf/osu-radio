@@ -51,11 +51,11 @@ compose.desktop {
 
 dependencies {
     implementation(compose.desktop.currentOs)
-    implementation(compose.material3)
-    implementation(compose.materialIconsExtended)
-    implementation(compose.ui)
-    implementation(compose.foundation)
-    implementation(compose.animation)
+    implementation("org.jetbrains.compose.material3:material3:1.9.0")
+    implementation("org.jetbrains.compose.material:material-icons-extended:1.7.3")
+    implementation("org.jetbrains.compose.ui:ui-desktop:1.11.1")
+    implementation("org.jetbrains.compose.foundation:foundation-desktop:1.11.1")
+    implementation("org.jetbrains.compose.animation:animation-desktop:1.11.1")
 
     // Provides Dispatchers.Main on the Swing EDT (matches coroutines-core pulled by Compose).
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.9.0")

@@ -201,7 +201,7 @@ fun SongsScreen(
             Box(modifier = Modifier.weight(1f)) {
                 if (settings.value.showAsRaster) {
                     LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
+                        columns = GridCells.Fixed(4),
                         state = gridState,
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),

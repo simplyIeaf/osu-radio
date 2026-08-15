@@ -166,9 +166,9 @@ class MainViewModel {
         if (!_isLoading.value) return
         scope.launch(Dispatchers.IO) {
             try {
-                val osuRadioDir = AppPaths.osuRadioDir()
-                Logger.init(osuRadioDir)
-                ConfigManager.init(osuRadioDir)
+                val dataDir = AppPaths.dataDir()
+                Logger.init(dataDir)
+                ConfigManager.init(AppPaths.configDir())
                 prefs = Prefs(AppPaths.prefsFile())
 
                 _loadingMessage.value = "Loading your settings..."

@@ -3,24 +3,27 @@ package com.osuradio.app.utils
 import java.io.File
 
 /**
- * Filesystem locations for the desktop build.
+ * Filesystem locations for the desktop build, following the XDG Base Directory
+ * specification like most other Linux applications and AppImages:
  *
- * The library keeps the exact same on-disk layout as the Android app
- * (`~/osu!radio/Songs/...`) so playlists, settings and songs stay compatible
- * with the phone version.
+ *  - config:  `~/.config/osu-radio/`  (config.txt, preferences)
+ *  - data:    `~/.local/share/osu-radio/`  (songs, playlist library, logs)
+ *  - cache:   `~/.cache/osu-radio/`  (temporary download files)
  */
 object AppPaths {
-    fun osuRadioDir(): File =
-        File(System.getProperty("user.home"), "osu!radio").apply { mkdirs() }
+    private fun homeDir(): File = File(System.getProperty("user.home"))
 
-    fun songsDir(): File =
-        File(osuRadioDir(), "Songs").apply { mkdirs() }
+    fun configDir(): File = File(homeDir(), ".config/osu-radio").apply { mkdirs() }
 
-    fun osuDroidSongsDir(): File =
-        File(System.getProperty("user.home"), "osu!droid/Songs")
+    fun dataDir(): File = File(homeDir(), ".local/share/osu-radio").apply { mkdirs() }
 
-    fun cacheDir(): File =
-        File(System.getProperty("java.io.tmpdir"), "osu-radio").apply { mkdirs() }
+    fun osuRadioDir(): File = dataDir()
 
-    fun prefsFile(): File = File(osuRadioDir(), "desktop_prefs.properties")
+    fun songsDir(): File = File(dataDir(), "Songs").apply { mkdirs() }
+
+    fun osuDroidSongsDir(): File = File(homeDir(), "osu!droid/Songs")
+
+    fun cacheDir(): File = File(homeDir(), ".cache/osu-radio").apply { mkdirs() }
+
+    fun prefsFile(): File = File(configDir(), "desktop_prefs.properties")
 }

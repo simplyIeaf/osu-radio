@@ -176,7 +176,7 @@ fun PlaylistsScreen(
             } else {
                 if (settings.value.showAsRaster) {
                     LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
+                        columns = GridCells.Fixed(4),
                         state = gridState,
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),

@@ -72,6 +72,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.osuradio.app.data.Playlist
@@ -94,6 +95,7 @@ fun PlaylistsScreen(
     var sortOption by remember { mutableStateOf("A-Z") }
     val filtersSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val gridState = rememberLazyGridState()
+    val gridColumns = if (LocalConfiguration.current.screenWidthDp >= 600) 4 else 2
 
     // Search state for filtering playlists
     var playlistSearch by remember { mutableStateOf("") }
@@ -177,7 +179,7 @@ fun PlaylistsScreen(
             } else {
                 if (settings.value.showAsRaster) {
                     LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
+                        columns = GridCells.Fixed(gridColumns),
                         state = gridState,
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),

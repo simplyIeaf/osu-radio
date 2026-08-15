@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.PlaylistPlay
@@ -71,7 +70,6 @@ import com.osuradio.app.data.AnimationStyle
 import com.osuradio.app.data.Playlist
 import com.osuradio.app.ui.components.MiniPlayer
 import com.osuradio.app.ui.screens.DownloadScreen
-import com.osuradio.app.ui.screens.ImportScreen
 import com.osuradio.app.ui.screens.LoadingScreen
 import com.osuradio.app.ui.screens.PlayerScreen
 import com.osuradio.app.ui.screens.PlaylistDetailScreen
@@ -84,32 +82,35 @@ import kotlinx.coroutines.launch
 import java.awt.Desktop
 import java.awt.datatransfer.DataFlavor
 import java.io.File
-import javax.swing.JFileChooser
-import javax.swing.filechooser.FileNameExtensionFilter
 
-fun main() = application {
-    val viewModel = remember { MainViewModel() }
+fun main() {
+    System.setProperty("skiko.renderApi", "OPENGL")
+    System.setProperty("skiko.vsync.enabled", "false")
 
-    DisposableEffect(Unit) {
-        viewModel.initialize()
-        onDispose { viewModel.release() }
-    }
+    application {
+        val viewModel = remember { MainViewModel() }
 
-    val settings by viewModel.settings.collectAsState()
+        DisposableEffect(Unit) {
+            viewModel.initialize()
+            onDispose { viewModel.release() }
+        }
 
-    Window(
-        onCloseRequest = {
-            viewModel.release()
-            exitApplication()
-        },
-        title = "osu!radio",
-        state = rememberWindowState(width = 1200.dp, height = 800.dp)
-    ) {
-        OsuRadioTheme(
-            theme = settings.theme,
-            colors = settings.themeColors
+        val settings by viewModel.settings.collectAsState()
+
+        Window(
+            onCloseRequest = {
+                viewModel.release()
+                exitApplication()
+            },
+            title = "osu!radio",
+            state = rememberWindowState(width = 1200.dp, height = 800.dp)
         ) {
-            MainApp(viewModel = viewModel)
+            OsuRadioTheme(
+                theme = settings.theme,
+                colors = settings.themeColors
+            ) {
+                MainApp(viewModel = viewModel)
+            }
         }
     }
 }
@@ -141,7 +142,6 @@ fun MainApp(viewModel: MainViewModel) {
         NavTab("Songs", Icons.Filled.LibraryMusic),
         NavTab("Playlists", Icons.Filled.PlaylistPlay),
         NavTab("Download", Icons.Filled.Download),
-        NavTab("Import", Icons.Filled.Archive),
         NavTab("Settings", Icons.Filled.Settings)
     )
 
@@ -371,20 +371,7 @@ fun MainApp(viewModel: MainViewModel) {
                                         }
                                     }
                                     2 -> DownloadScreen(viewModel = viewModel)
-                                    3 -> ImportScreen(
-                                        viewModel = viewModel,
-                                        onImportOsz = {
-                                            chooseFile("osz", "osu! beatmap (.osz)")?.let { file ->
-                                                viewModel.importOszFile(file)
-                                            }
-                                        },
-                                        onImportZip = {
-                                            chooseFile("zip", "Zip archive (.zip)")?.let { file ->
-                                                viewModel.importZipFile(file)
-                                            }
-                                        }
-                                    )
-                                    4 -> SettingsScreen(viewModel = viewModel)
+                                    3 -> SettingsScreen(viewModel = viewModel)
                                 }
                             }
                         }
@@ -500,15 +487,5 @@ private fun FileDropContainer(
                 }
             }
         }
-    }
-}
-
-private fun chooseFile(extension: String, description: String): File? {
-    val chooser = JFileChooser()
-    chooser.fileFilter = FileNameExtensionFilter(description, extension)
-    return if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
-        chooser.selectedFile
-    } else {
-        null
     }
 }
