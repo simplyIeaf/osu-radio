@@ -403,10 +403,13 @@ class DesktopPlayer(
                 continue
             }
 
-            if (!writeToLine(chunk, framesToWrite)) {
-                // No audio device available — back off so the loop doesn't spin at 100% CPU.
+            val chunkNs = framesToWrite.toLong() * 1000000000L / sampleRate
+            val t0 = System.nanoTime()
+            writeToLine(chunk, framesToWrite)
+            val remainingNs = chunkNs - (System.nanoTime() - t0)
+            if (remainingNs > 0) {
                 try {
-                    Thread.sleep(100)
+                    Thread.sleep(remainingNs / 1000000, (remainingNs % 1000000).toInt())
                 } catch (_: InterruptedException) {
                     return
                 }
