@@ -5,6 +5,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import com.osuradio.app.data.AppFont
 import com.osuradio.app.data.AppTheme
 import com.osuradio.app.data.ThemeColors
 
@@ -34,11 +35,13 @@ fun getColorScheme(
 fun OsuRadioTheme(
     theme: AppTheme = AppTheme.PINK,
     colors: ThemeColors = ThemeColors(),
+    font: AppFont = AppFont.DEFAULT,
+    fontSize: Float = 1f,
     content: @Composable () -> Unit
 ) {
     MaterialTheme(
         colorScheme = getColorScheme(theme, colors),
-        typography = OsuRadioTypography,
+        typography = appTypography(font.toFontFamily(), fontSize),
         content = content
     )
 }

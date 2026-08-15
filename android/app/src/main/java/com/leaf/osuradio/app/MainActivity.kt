@@ -116,7 +116,9 @@ class MainActivity : ComponentActivity() {
             val settings = viewModel.settings.collectAsState()
             OsuRadioTheme(
                 theme = settings.value.theme,
-                colors = settings.value.themeColors
+                colors = settings.value.themeColors,
+                font = settings.value.appFont,
+                fontSize = settings.value.fontSize.scale
             ) {
                 val uiScale = settings.value.uiScale.coerceIn(0.8f, 1.6f)
                 val density = LocalDensity.current

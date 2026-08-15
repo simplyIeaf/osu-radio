@@ -113,7 +113,9 @@ fun main() {
         ) {
             OsuRadioTheme(
                 theme = settings.theme,
-                colors = settings.themeColors
+                colors = settings.themeColors,
+                font = settings.appFont,
+                fontSize = settings.fontSize.scale
             ) {
                 val uiScale = settings.uiScale.coerceIn(0.8f, 1.6f)
                 val density = LocalDensity.current

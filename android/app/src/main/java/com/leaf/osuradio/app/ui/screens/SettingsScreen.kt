@@ -78,16 +78,20 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.leaf.osuradio.BuildConfig
 import com.leaf.osuradio.data.AnimationStyle
+import com.leaf.osuradio.data.AppFont
+import com.leaf.osuradio.data.AppFontSize
 import com.leaf.osuradio.data.AudioTransition
 import com.leaf.osuradio.data.EqPreset
 import com.leaf.osuradio.data.ThemeColors
 import com.leaf.osuradio.ui.components.ScreenHeader
+import com.leaf.osuradio.ui.theme.toFontFamily
 import com.leaf.osuradio.viewmodel.MainViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -211,6 +215,36 @@ private fun GeneralSettingsTab(viewModel: MainViewModel) {
                             settings.value.copy(
                                 animationStyle = animationLabels.entries.first { it.value == label }.key
                             )
+                        )
+                    }
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                SettingsDropdown(
+                    label    = "Font",
+                    selected = settings.value.appFont.label,
+                    options  = AppFont.entries.map { it.label },
+                    onSelect = { label ->
+                        viewModel.updateSettings(
+                            settings.value.copy(appFont = AppFont.entries.first { it.label == label })
+                        )
+                    },
+                    optionStyle = { label ->
+                        TextStyle(
+                            fontFamily = AppFont.entries.first { it.label == label }.toFontFamily(),
+                            fontSize = MaterialTheme.typography.bodyMedium.fontSize
+                        )
+                    }
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                SettingsDropdown(
+                    label    = "Font Size",
+                    selected = settings.value.fontSize.label,
+                    options  = AppFontSize.entries.map { it.label },
+                    onSelect = { label ->
+                        viewModel.updateSettings(
+                            settings.value.copy(fontSize = AppFontSize.entries.first { it.label == label })
                         )
                     }
                 )
@@ -597,7 +631,8 @@ private fun SettingsDropdown(
     label: String,
     selected: String,
     options: List<String>,
-    onSelect: (String) -> Unit
+    onSelect: (String) -> Unit,
+    optionStyle: (String) -> TextStyle = { MaterialTheme.typography.bodyMedium }
 ) {
     var expanded by remember { mutableStateOf(false) }
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
@@ -616,7 +651,7 @@ private fun SettingsDropdown(
         ) {
             options.forEach { option ->
                 DropdownMenuItem(
-                    text    = { Text(option, style = MaterialTheme.typography.bodyMedium) },
+                    text    = { Text(option, style = optionStyle(option)) },
                     onClick = { expanded = false; onSelect(option) }
                 )
             }

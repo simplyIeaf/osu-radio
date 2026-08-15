@@ -8,6 +8,42 @@ enum class AudioTransition { NONE, FADE_IN_OUT, CROSSFADE, SWOOSH }
 
 enum class RepeatMode { NONE, ONE, ALL }
 
+enum class AppFont(val label: String, val regular: String, val bold: String?) {
+    DEFAULT       ("Default",       "",                    null),
+    LATO          ("Lato",          "lato-regular.ttf",          "lato-bold.ttf"),
+    POPPINS       ("Poppins",       "poppins-regular.ttf",       "poppins-bold.ttf"),
+    ANTON         ("Anton",         "anton-regular.ttf",         null),
+    ARVO          ("Arvo",          "arvo-regular.ttf",          "arvo-bold.ttf"),
+    BANGERS       ("Bangers",       "bangers-regular.ttf",       null),
+    PLAY          ("Play",          "play-regular.ttf",          "play-bold.ttf"),
+    HIND          ("Hind",          "hind-regular.ttf",          "hind-bold.ttf"),
+    PACIFICO      ("Pacifico",      "pacifico-regular.ttf",      null),
+    AMARANTE      ("Amarante",      "amarante-regular.ttf",      null),
+    ABEL          ("Abel",          "abel-regular.ttf",          null),
+    ACME          ("Acme",          "acme-regular.ttf",          null),
+    ALLERTA       ("Allerta",       "allerta-regular.ttf",       null),
+    SARPANCH      ("Sarpanch",      "sarpanch-regular.ttf",      "sarpanch-bold.ttf"),
+    LOBSTER       ("Lobster",       "lobster-regular.ttf",       null),
+    RIGHTEOUS     ("Righteous",     "righteous-regular.ttf",     null),
+    COURGETTE     ("Courgette",     "courgette-regular.ttf",     null),
+    PHILOSOPHER   ("Philosopher",   "philosopher-regular.ttf",   "philosopher-bold.ttf"),
+    MARCELLUS     ("Marcellus",     "marcellus-regular.ttf",     null),
+    CREEPSTER     ("Creepster",     "creepster-regular.ttf",     null),
+    AUDIOWIDE     ("Audiowide",     "audiowide-regular.ttf",     null),
+    BUNGEE        ("Bungee",        "bungee-regular.ttf",        null),
+    GUDEA         ("Gudea",         "gudea-regular.ttf",         "gudea-bold.ttf"),
+    YANTRA_NAV    ("Yantramanav",   "yantramanav-regular.ttf",   "yantramanav-bold.ttf"),
+    VOLKHOV       ("Volkhov",       "volkhov-regular.ttf",       "volkhov-bold.ttf"),
+    RIBEYE        ("Ribeye",        "ribeye-regular.ttf",        null)
+}
+
+enum class AppFontSize(val label: String, val scale: Float) {
+    SMALL    ("Small",        0.85f),
+    DEFAULT  ("Default",      1f),
+    LARGE    ("Large",        1.15f),
+    XLARGE   ("Extra Large",  1.3f)
+}
+
 enum class EqPreset(val label: String, val bandLevels: List<Int>) {
     FLAT         ("Flat",          listOf(    0,    0,    0,    0,    0)),
     BASS_BOOST   ("Bass Boost",    listOf(  800,  400,    0,    0,    0)),
@@ -53,5 +89,7 @@ data class AppSettings(
     val loudnessGainDb: Int = 3,
     val showAsRaster: Boolean = false,
     val lastTab: Int = 0,
-    val uiScale: Float = 1f
+    val uiScale: Float = 1f,
+    val appFont: AppFont = AppFont.DEFAULT,
+    val fontSize: AppFontSize = AppFontSize.DEFAULT
 )
