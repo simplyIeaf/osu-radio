@@ -27,7 +27,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -102,7 +101,6 @@ fun SongsScreen(
     val settings = viewModel.settings.collectAsState()
     val listState = rememberLazyListState()
     val gridState = rememberLazyGridState()
-    val gridColumns = if (LocalConfiguration.current.screenWidthDp >= 600) 4 else 2
 
     // Song context menu state
     var menuAnchorSong by remember { mutableStateOf<Song?>(null) }
@@ -204,7 +202,7 @@ fun SongsScreen(
             Box(modifier = Modifier.weight(1f)) {
                 if (settings.value.showAsRaster) {
                     LazyVerticalGrid(
-                        columns = GridCells.Fixed(gridColumns),
+                        columns = GridCells.Fixed(2),
                         state = gridState,
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
