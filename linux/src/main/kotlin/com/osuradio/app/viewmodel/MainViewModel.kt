@@ -184,8 +184,6 @@ class MainViewModel {
                 )
                 _playlists.value = ConfigManager.getPlaylists()
 
-                AppPaths.migrateLegacyData()
-
                 val existingSongs = SongScanner.loadAlreadyScannedSongs()
                 val newSongs: List<Song>
                 if (_settings.value.syncWithOsuDroid) {

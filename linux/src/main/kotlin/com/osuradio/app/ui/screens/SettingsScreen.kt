@@ -348,6 +348,8 @@ private fun AudioSettingsTab(viewModel: MainViewModel) {
                     }
                 )
 
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+
                 SettingsToggle(
                     title    = "Audio Compatibility",
                     subtitle = "Use the legacy Java Sound engine that works on most systems",
