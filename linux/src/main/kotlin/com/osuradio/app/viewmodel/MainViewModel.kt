@@ -282,10 +282,15 @@ class MainViewModel {
                 val i = currentIndex()
                 playQueueIndex((i + 1) % songs.size)
             }
-            else -> { // NONE — never stop: reshuffle and continue or wrap around.
-                if (_settings.value.shuffle) _queue.value = songs.shuffled()
-                _isPlaying.value = true
-                playQueueIndex(0)
+            else -> { // NONE — never stop: follow the queue order; only reshuffle at the end.
+                val i = currentIndex()
+                if (i >= 0 && i + 1 < songs.size) {
+                    playQueueIndex(i + 1)
+                } else {
+                    if (_settings.value.shuffle) _queue.value = songs.shuffled()
+                    _isPlaying.value = true
+                    playQueueIndex(0)
+                }
             }
         }
     }

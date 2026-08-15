@@ -30,8 +30,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.Bedtime
@@ -45,6 +47,8 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,10 +59,8 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -223,7 +225,7 @@ fun PlayerScreen(
                         Box(
                             modifier = Modifier
                                 .size(artSide)
-                                .shadow(24.dp, RoundedCornerShape(20.dp))
+                                .shadow(10.dp, RoundedCornerShape(20.dp))
                                 .clip(RoundedCornerShape(20.dp))
                                 .background(MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center
@@ -275,7 +277,38 @@ fun PlayerScreen(
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = formatMs(currentPositionMs.value),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Slider(
+                                value = if (song.duration > 0) currentPositionMs.value.toFloat() / song.duration.toFloat() else 0f,
+                                onValueChange = { fraction ->
+                                    viewModel.seekTo((fraction * song.duration).toLong())
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = 8.dp),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = MaterialTheme.colorScheme.primary,
+                                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                                )
+                            )
+                            Text(
+                                text = formatMs(song.duration),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             IconButton(onClick = { viewModel.toggleShuffle() }) {
@@ -345,38 +378,6 @@ fun PlayerScreen(
                                     modifier = Modifier.size(24.dp)
                                 )
                             }
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = formatMs(currentPositionMs.value),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Slider(
-                                value = if (song.duration > 0) currentPositionMs.value.toFloat() / song.duration.toFloat() else 0f,
-                                onValueChange = { fraction ->
-                                    viewModel.seekTo((fraction * song.duration).toLong())
-                                },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(horizontal = 8.dp),
-                                colors = SliderDefaults.colors(
-                                    thumbColor = MaterialTheme.colorScheme.primary,
-                                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                                )
-                            )
-                            Text(
-                                text = formatMs(song.duration),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         }
                     }
 
@@ -590,11 +591,10 @@ fun PlayerScreen(
 
     if (showSleepTimer) {
         val now = Calendar.getInstance()
-        val timePickerState = rememberTimePickerState(
-            initialHour = now.get(Calendar.HOUR_OF_DAY),
-            initialMinute = now.get(Calendar.MINUTE),
-            is24Hour = false
-        )
+        var sleepHour by remember { mutableStateOf(now.get(Calendar.HOUR_OF_DAY)) }
+        var sleepMinute by remember { mutableStateOf(now.get(Calendar.MINUTE)) }
+        var hourMenuOpen by remember { mutableStateOf(false) }
+        var minuteMenuOpen by remember { mutableStateOf(false) }
         Dialog(onDismissRequest = { showSleepTimer = false }) {
             Surface(
                 shape = RoundedCornerShape(28.dp),
@@ -612,7 +612,73 @@ fun PlayerScreen(
                             .fillMaxWidth()
                             .padding(bottom = 16.dp)
                     )
-                    TimePicker(state = timePickerState)
+                    Row(
+                        modifier = Modifier.padding(top = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box {
+                            TextButton(onClick = { hourMenuOpen = true }) {
+                                Text(
+                                    text = "%02d".format(sleepHour),
+                                    style = MaterialTheme.typography.titleLarge
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = hourMenuOpen,
+                                onDismissRequest = { hourMenuOpen = false }
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .heightIn(max = 280.dp)
+                                        .verticalScroll(rememberScrollState())
+                                ) {
+                                    (0..23).forEach { hour ->
+                                        DropdownMenuItem(
+                                            text = { Text("%02d".format(hour)) },
+                                            onClick = {
+                                                sleepHour = hour
+                                                hourMenuOpen = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        Text(
+                            text = ":",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Box {
+                            TextButton(onClick = { minuteMenuOpen = true }) {
+                                Text(
+                                    text = "%02d".format(sleepMinute),
+                                    style = MaterialTheme.typography.titleLarge
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = minuteMenuOpen,
+                                onDismissRequest = { minuteMenuOpen = false }
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .heightIn(max = 280.dp)
+                                        .verticalScroll(rememberScrollState())
+                                ) {
+                                    (0..59).forEach { minute ->
+                                        DropdownMenuItem(
+                                            text = { Text("%02d".format(minute)) },
+                                            onClick = {
+                                                sleepMinute = minute
+                                                minuteMenuOpen = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -624,8 +690,8 @@ fun PlayerScreen(
                         }
                         TextButton(onClick = {
                             val target = Calendar.getInstance().apply {
-                                set(Calendar.HOUR_OF_DAY, timePickerState.hour)
-                                set(Calendar.MINUTE, timePickerState.minute)
+                                set(Calendar.HOUR_OF_DAY, sleepHour)
+                                set(Calendar.MINUTE, sleepMinute)
                                 set(Calendar.SECOND, 0)
                                 set(Calendar.MILLISECOND, 0)
                             }

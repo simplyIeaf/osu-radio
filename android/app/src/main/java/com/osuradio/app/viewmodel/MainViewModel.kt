@@ -175,7 +175,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             // Wire all settings into the freshly-connected service
             service.setTransition(_settings.value.audioTransition)
-            service.setShuffleMode(_settings.value.shuffle)
+            service.setShuffleMode(false)
             service.setRepeatMode(_settings.value.repeat)
             service.applyEqualizerSettings(_settings.value.equalizerSettings ?: EqualizerSettings())
             service.applyLoudnessSettings(
@@ -605,7 +605,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         ConfigManager.saveSettings(settings)
         val service = musicService ?: return
         service.setTransition(settings.audioTransition)
-        service.setShuffleMode(settings.shuffle)
+        service.setShuffleMode(false)
         service.setRepeatMode(settings.repeat)
         service.applyEqualizerSettings(settings.equalizerSettings ?: EqualizerSettings())
         service.applyLoudnessSettings(settings.loudnessNormalization, settings.loudnessGainDb)
