@@ -29,6 +29,8 @@ object TimeStretcher {
         if (overlap <= 0) return samples
 
         val searchRange = (analysisHop * 0.5).toInt().coerceAtLeast(4)
+        val probeStride = max(1, searchRange / 16)
+        val corrStride = max(1, overlap / 16)
         val framesOut = ((framesIn - window).toDouble() / analysisHop * synthHop).toInt() + window
         val out = FloatArray(framesOut * channels)
 
@@ -58,10 +60,12 @@ object TimeStretcher {
             val hi = min(framesIn - window, inPos + searchRange)
             var best = inPos
             var bestCorr = Double.NEGATIVE_INFINITY
-            for (probe in lo..hi) {
+            for (probe in lo..hi step probeStride) {
                 var corr = 0.0
-                for (i in 0 until overlap) {
+                var i = 0
+                while (i < overlap) {
                     corr += mono[probe + i].toDouble() * outMono[outPos + i]
+                    i += corrStride
                 }
                 if (corr > bestCorr) {
                     bestCorr = corr

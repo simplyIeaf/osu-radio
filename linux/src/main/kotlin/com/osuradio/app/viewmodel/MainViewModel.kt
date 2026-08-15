@@ -537,7 +537,7 @@ class MainViewModel {
         if (!player.applyMod(newModSettings)) {
             // Restretch needed: reload the song at the same position, but only
             // start playing if it was playing before, so a paused user stays paused.
-            player.play(song, newModSettings, _currentPositionMs.value, startPlaying = wasPlaying)
+            player.play(song, newModSettings, player.currentPositionMs(), startPlaying = wasPlaying)
         }
     }
 

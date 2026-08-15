@@ -4,11 +4,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -36,6 +38,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -193,17 +196,22 @@ internal fun PlaylistDetailPane(
     val songs = allSongs.value.filter { currentPlaylist.songIds.contains(it.id) }
     val totalDurationMs = songs.sumOf { it.duration }
 
-    Column(modifier = modifier.fillMaxWidth()) {
-        Row(
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val artSide = minOf(maxWidth * 0.42f, maxHeight * 0.42f, 440.dp).coerceAtLeast(120.dp)
+
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 24.dp, end = 24.dp, top = 20.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxHeight(),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            Spacer(modifier = Modifier.height(16.dp))
+
             Box(
                 modifier = Modifier
-                    .size(120.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .size(artSide)
+                    .shadow(10.dp, RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(20.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
@@ -220,104 +228,108 @@ internal fun PlaylistDetailPane(
                         imageVector = Icons.Filled.MusicNote,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(40.dp)
+                        modifier = Modifier.size(artSide * 0.3f)
                     )
                 }
             }
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = currentPlaylist.name,
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "${songs.size} songs • ${formatPlaylistDuration(totalDurationMs)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
 
-        Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-        Row(
-            modifier = Modifier.padding(start = 24.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = { viewModel.playPlaylist(currentPlaylist, shuffle = true) }) {
-                Icon(
-                    Icons.Filled.Shuffle,
-                    contentDescription = "Shuffle",
-                    tint = if (settings.value.shuffle) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Spacer(modifier = Modifier.width(16.dp))
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary),
-                contentAlignment = Alignment.Center
+            Text(
+                text = currentPlaylist.name,
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 24.dp)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "${songs.size} songs • ${formatPlaylistDuration(totalDurationMs)}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { viewModel.playPlaylist(currentPlaylist, shuffle = false) }) {
+                IconButton(onClick = { viewModel.playPlaylist(currentPlaylist, shuffle = true) }) {
                     Icon(
-                        Icons.Filled.PlayArrow,
-                        contentDescription = "Play",
-                        tint = MaterialTheme.colorScheme.onPrimary
+                        Icons.Filled.Shuffle,
+                        contentDescription = "Shuffle",
+                        tint = if (settings.value.shuffle) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                    contentAlignment = Alignment.Center
+                ) {
+                    IconButton(onClick = { viewModel.playPlaylist(currentPlaylist, shuffle = false) }) {
+                        Icon(
+                            Icons.Filled.PlayArrow,
+                            contentDescription = "Play",
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                IconButton(onClick = { viewModel.toggleRepeat() }) {
+                    Icon(
+                        imageVector = when (settings.value.repeat) {
+                            RepeatMode.ONE -> Icons.Filled.RepeatOne
+                            else -> Icons.Filled.Repeat
+                        },
+                        contentDescription = "Loop",
+                        tint = if (settings.value.repeat != RepeatMode.NONE) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
-            Spacer(modifier = Modifier.width(16.dp))
-            IconButton(onClick = { viewModel.toggleRepeat() }) {
-                Icon(
-                    imageVector = when (settings.value.repeat) {
-                        RepeatMode.ONE -> Icons.Filled.RepeatOne
-                        else -> Icons.Filled.Repeat
-                    },
-                    contentDescription = "Loop",
-                    tint = if (settings.value.repeat != RepeatMode.NONE) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
 
-        Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-        if (songs.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    "No songs in this playlist",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                items(songs, key = { it.id }) { song ->
-                    PlaylistSongRow(
-                        song = song,
-                        onClick = {
-                            viewModel.playPlaylistFrom(currentPlaylist, song)
-                            onSongClick(song)
-                        },
-                        onRemove = { viewModel.removeSongFromPlaylist(currentPlaylist.id, song.id) }
+            if (songs.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "No songs in this playlist",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(songs, key = { it.id }) { song ->
+                        PlaylistSongRow(
+                            song = song,
+                            onClick = {
+                                viewModel.playPlaylistFrom(currentPlaylist, song)
+                                onSongClick(song)
+                            },
+                            onRemove = { viewModel.removeSongFromPlaylist(currentPlaylist.id, song.id) }
+                        )
+                    }
                 }
             }
         }

@@ -46,6 +46,11 @@ class DesktopPlayer(
     private var rampEnd = 1.0
     private var rampActive = false
     private var currentSongId: String? = null
+    private var playToken = 0
+    private var decodedSongId: String? = null
+    private var decodedSamples: FloatArray? = null
+    private var decodedChannels = 2
+    private var decodedSampleRate = 44100f
 
     private var playing = false
     @Volatile private var stopped = false
@@ -105,35 +110,48 @@ class DesktopPlayer(
      * starting on its own once the decode finishes.
      */
     fun play(song: Song, modSettings: ModSettings, startPositionMs: Long = 0L, startPlaying: Boolean = true) {
+        val token: Int
         synchronized(lock) {
+            token = ++playToken
             currentSongId = song.id
             stopped = false
             rampJob?.cancel()
+            // Stop current output immediately so the previous mod is never heard
+            // while the new one is being prepared.
+            buffer = null
+            playing = false
+            endedNotified = false
+            fadeActive = false
+            currentVolume = 0f
+            volumeGoal = 0f
+            lock.notifyAll()
         }
         scope.launch(Dispatchers.IO) {
             try {
-                val decoded = AudioDecoder.decode(File(song.audioPath))
+                val (decoded, decodeChannels, decodeRate) = getDecoded(song)
                 val (tempo, pitch) = resolveModParams(modSettings)
                 val isRampActive = modSettings.activeMod == SongMod.WIND_UP ||
                         modSettings.activeMod == SongMod.WIND_DOWN
                 val stretchRatio = if (isRampActive) 1f else pitch / tempo
                 val stretched: FloatArray = if (!isRampActive && abs(stretchRatio - 1f) > 0.002f) {
-                    TimeStretcher.stretch(decoded.samples, decoded.channels, decoded.sampleRate, stretchRatio)
+                    TimeStretcher.stretch(decoded, decodeChannels, decodeRate, stretchRatio)
                 } else {
-                    decoded.samples
+                    decoded
                 }
+                val actualStretch = if (stretched === decoded) 1.0 else stretched.size.toDouble() / decoded.size.toDouble()
 
-                val totalFrames = stretched.size / decoded.channels
+                val totalFrames = stretched.size / decodeChannels
                 val startFrame = if (startPositionMs > 0 && totalFrames > 0) {
-                    (startPositionMs * decoded.sampleRate / 1000.0).toLong()
+                    (startPositionMs * decodeRate * actualStretch / 1000.0).toLong()
                         .coerceIn(0L, (totalFrames - 1).toLong())
                 } else 0L
 
-                synchronized(lock) {
+                val committed = synchronized(lock) {
+                    if (token != playToken) return@launch
                     buffer = stretched
-                    bufferStretch = stretchRatio
-                    channels = decoded.channels
-                    sampleRate = decoded.sampleRate
+                    bufferStretch = actualStretch.toFloat()
+                    channels = decodeChannels
+                    sampleRate = decodeRate
                     bufferIndex = startFrame.coerceAtLeast(0L)
                     rampActive = modSettings.activeMod == SongMod.WIND_UP || modSettings.activeMod == SongMod.WIND_DOWN
                     rampStart = 1.0
@@ -165,18 +183,41 @@ class DesktopPlayer(
                         fadeActive = false
                     }
                     lock.notifyAll()
+                    true
                 }
-                ensureThread()
-                if (startPlaying) scope.launch { listener?.onIsPlayingChanged(true) }
+                if (committed) {
+                    ensureThread()
+                    if (startPlaying) scope.launch { listener?.onIsPlayingChanged(true) }
+                }
             } catch (e: Exception) {
                 Logger.error(TAG, "Failed to prepare ${song.title}", e)
-                synchronized(lock) {
+                val failed = synchronized(lock) {
+                    if (token != playToken) return@launch
                     playing = false
                     lock.notifyAll()
+                    true
                 }
-                listener?.onPlaybackFailed()
+                if (failed) listener?.onPlaybackFailed()
             }
         }
+    }
+
+    /** Returns the decoded PCM for [song], reusing the last decode for the same song. */
+    private fun getDecoded(song: Song): Triple<FloatArray, Int, Float> {
+        val cached = synchronized(lock) {
+            if (decodedSongId == song.id && decodedSamples != null) {
+                Triple(decodedSamples!!, decodedChannels, decodedSampleRate)
+            } else null
+        }
+        if (cached != null) return cached
+        val decoded = AudioDecoder.decode(File(song.audioPath))
+        synchronized(lock) {
+            decodedSongId = song.id
+            decodedSamples = decoded.samples
+            decodedChannels = decoded.channels
+            decodedSampleRate = decoded.sampleRate
+        }
+        return Triple(decoded.samples, decoded.channels, decoded.sampleRate)
     }
 
     /** Fades out over [fadeMs] and then starts [song] (used for audio transitions). */
@@ -252,8 +293,8 @@ class DesktopPlayer(
     fun isPlaying(): Boolean = synchronized(lock) { playing }
 
     fun currentPositionMs(): Long = synchronized(lock) {
-        if (sampleRate <= 0f) 0L
-        else (bufferIndex * 1000 / sampleRate).toLong()
+        if (sampleRate <= 0f || bufferStretch <= 0f) 0L
+        else (bufferIndex * 1000.0 / (sampleRate * bufferStretch)).toLong()
     }
 
     fun seekTo(positionMs: Long) {
@@ -261,8 +302,10 @@ class DesktopPlayer(
             val buf = buffer ?: return
             val frames = buf.size / channels
             bufferIndex = if (frames > 0) {
-                (positionMs * sampleRate / 1000.0).toLong().coerceIn(0L, (frames - 1).toLong())
+                (positionMs * sampleRate * bufferStretch / 1000.0).toLong()
+                    .coerceIn(0L, (frames - 1).toLong())
             } else 0L
+            endedNotified = false
             lock.notifyAll()
         }
     }
@@ -340,6 +383,10 @@ class DesktopPlayer(
 
     fun release() {
         stop()
+        synchronized(lock) {
+            decodedSamples = null
+            decodedSongId = null
+        }
     }
 
     // ── Internals ─────────────────────────────────────────────────────────────
@@ -414,10 +461,11 @@ class DesktopPlayer(
                 }
                 if (notifyEnded) {
                     scope.launch { listener?.onSongEnded() }
-                    // Wait for the next play() to feed us a new buffer.
-                    synchronized(lock) {
-                        try { lock.wait() } catch (_: InterruptedException) { return }
-                    }
+                }
+                // Whether or not this was the first time the end was reached, wait
+                // for the next play()/seekTo() instead of spinning the CPU.
+                synchronized(lock) {
+                    try { lock.wait() } catch (_: InterruptedException) { return }
                 }
                 continue
             }
