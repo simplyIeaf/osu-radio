@@ -33,7 +33,7 @@ jobs:
       - name: Install packaging tools and FUSE
         run: |
           sudo apt-get update
-          sudo apt-get install -y binutils
+          sudo apt-get install -y binutils xz-utils
           sudo apt-get install -y libfuse2 || sudo apt-get install -y libfuse2t64 || true
 
       - name: Download appimagetool
@@ -54,8 +54,6 @@ jobs:
           APPIMAGE_EXTRACT_AND_RUN: '1'
         run: cd linux && ./gradlew packageDistributionForCurrentOS --no-daemon --stacktrace
 
-      # Compose Multiplatform's AppImage target is jpackage's unpacked app-image
-      # directory, so wrap it in an AppDir and pack it into a single .AppImage.
       - name: Package AppImage
         env:
           APPIMAGE_EXTRACT_AND_RUN: '1'
