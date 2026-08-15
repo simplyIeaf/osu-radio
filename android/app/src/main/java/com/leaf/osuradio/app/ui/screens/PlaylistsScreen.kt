@@ -9,11 +9,13 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -28,6 +30,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -58,6 +61,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -84,7 +88,8 @@ import com.leaf.osuradio.viewmodel.MainViewModel
 @Composable
 fun PlaylistsScreen(
     viewModel: MainViewModel,
-    onOpenPlaylist: (Playlist) -> Unit
+    onOpenPlaylist: (Playlist) -> Unit,
+    onSongClick: (Song) -> Unit
 ) {
     val playlists = viewModel.playlists.collectAsState()
     val settings = viewModel.settings.collectAsState()
@@ -96,133 +101,228 @@ fun PlaylistsScreen(
     val filtersSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val gridState = rememberLazyGridState()
 
-    // Search state for filtering playlists
     var playlistSearch by remember { mutableStateOf("") }
+    var selectedPlaylistId by remember { mutableStateOf<String?>(null) }
 
     val searchedPlaylists = if (playlistSearch.isBlank()) playlists.value
     else playlists.value.filter { it.name.lowercase().contains(playlistSearch.lowercase()) }
 
     val filteredPlaylists = searchedPlaylists.sortedBy { it.name.lowercase() }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        ScreenHeader(
-            title = "Playlists",
-            subtitle = "${playlists.value.size} ${if (playlists.value.size == 1) "playlist" else "playlists"}"
-        )
+    val selectedPlaylist = selectedPlaylistId?.let { id -> playlists.value.find { it.id == id } }
 
-        // Playlist search bar
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedTextField(
-                value = playlistSearch,
-                onValueChange = { playlistSearch = it },
-                placeholder = { Text("Search playlists...") },
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(24.dp),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                    unfocusedIndicatorColor = MaterialTheme.colorScheme.surfaceVariant
-                ),
-                leadingIcon = {
-                    Icon(
-                        Icons.Filled.Search,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                },
-                trailingIcon = {
-                    if (playlistSearch.isNotEmpty()) {
-                        IconButton(onClick = { playlistSearch = "" }) {
-                            Icon(Icons.Filled.Close, contentDescription = "Clear")
-                        }
-                    }
-                },
-                singleLine = true
-            )
-            IconButton(onClick = { showFiltersMenu = true }) {
-                Icon(
-                    imageVector = Icons.Filled.Tune,
-                    contentDescription = "Sort and filter playlists",
-                    tint = Color.White
-                )
-            }
-        }
-
-        Box(modifier = Modifier.weight(1f)) {
-            if (filteredPlaylists.isEmpty()) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        if (minOf(maxWidth, maxHeight) >= 600.dp) {
+            Row(modifier = Modifier.fillMaxSize()) {
                 Column(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                    modifier = Modifier
+                        .width(320.dp)
+                        .fillMaxHeight()
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.FolderOpen,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    )
-                    Text(
-                        text = if (playlistSearch.isNotEmpty()) "No playlists found"
-                        else "No playlists yet\nTap + to create one",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            } else {
-                if (settings.value.showAsRaster) {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        state = gridState,
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.fillMaxSize()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 8.dp, top = 16.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        items(filteredPlaylists, key = { it.id }) { playlist ->
-                            val songs = viewModel.getSongsForPlaylist(playlist)
-                            PlaylistCard(
-                                playlist = playlist,
-                                songs = songs,
-                                onOpen = { onOpenPlaylist(playlist) },
-                                onDelete = { viewModel.deletePlaylist(playlist.id) },
-                                onRename = { newName -> viewModel.renamePlaylist(playlist.id, newName) }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Playlists",
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = MaterialTheme.colorScheme.onBackground,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "${playlists.value.size} ${if (playlists.value.size == 1) "playlist" else "playlists"}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(onClick = { showCreateDialog = true }) {
+                            Icon(
+                                Icons.Filled.Add,
+                                contentDescription = "Create playlist",
+                                tint = MaterialTheme.colorScheme.primary
                             )
                         }
                     }
-                } else {
-                    LazyColumn(
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        items(filteredPlaylists, key = { it.id }) { playlist ->
-                            val songs = viewModel.getSongsForPlaylist(playlist)
-                            PlaylistCard(
-                                playlist = playlist,
-                                songs = songs,
-                                onOpen = { onOpenPlaylist(playlist) },
-                                onDelete = { viewModel.deletePlaylist(playlist.id) },
-                                onRename = { newName -> viewModel.renamePlaylist(playlist.id, newName) }
+
+                    PlaylistSearchField(
+                        value = playlistSearch,
+                        onValueChange = { playlistSearch = it },
+                        onFilters = { showFiltersMenu = true },
+                        modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
+                    )
+
+                    if (filteredPlaylists.isEmpty()) {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.FolderOpen,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                                modifier = Modifier.padding(bottom = 12.dp)
+                            )
+                            Text(
+                                text = if (playlistSearch.isNotEmpty()) "No playlists found"
+                                else "No playlists yet",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
                             )
                         }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(filteredPlaylists, key = { it.id }) { playlist ->
+                                val songs = viewModel.getSongsForPlaylist(playlist)
+                                PlaylistCard(
+                                    playlist = playlist,
+                                    songs = songs,
+                                    selected = playlist.id == selectedPlaylistId,
+                                    onOpen = { selectedPlaylistId = playlist.id },
+                                    onDelete = {
+                                        viewModel.deletePlaylist(playlist.id)
+                                        if (selectedPlaylistId == playlist.id) selectedPlaylistId = null
+                                    },
+                                    onRename = { newName -> viewModel.renamePlaylist(playlist.id, newName) }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                VerticalDivider(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(1.dp),
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                )
+
+                if (selectedPlaylist != null) {
+                    PlaylistDetailPane(
+                        viewModel = viewModel,
+                        playlist = selectedPlaylist,
+                        onSongClick = onSongClick,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                    )
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.QueueMusic,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                            modifier = Modifier.size(56.dp)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "Select a playlist to view its contents",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
                     }
                 }
             }
+        } else {
+            Column(modifier = Modifier.fillMaxSize()) {
+                ScreenHeader(
+                    title = "Playlists",
+                    subtitle = "${playlists.value.size} ${if (playlists.value.size == 1) "playlist" else "playlists"}"
+                )
 
-            FloatingActionButton(
-                onClick = { showCreateDialog = true },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(20.dp),
-                containerColor = MaterialTheme.colorScheme.primary
-            ) {
-                Icon(Icons.Filled.Add, "Create playlist", tint = MaterialTheme.colorScheme.onPrimary)
+                PlaylistSearchField(
+                    value = playlistSearch,
+                    onValueChange = { playlistSearch = it },
+                    onFilters = { showFiltersMenu = true },
+                    modifier = Modifier.padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 4.dp)
+                )
+
+                Box(modifier = Modifier.weight(1f)) {
+                    if (filteredPlaylists.isEmpty()) {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.FolderOpen,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                                modifier = Modifier.padding(bottom = 12.dp)
+                            )
+                            Text(
+                                text = if (playlistSearch.isNotEmpty()) "No playlists found"
+                                else "No playlists yet\nTap + to create one",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    } else {
+                        if (settings.value.showAsRaster) {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(2),
+                                state = gridState,
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                items(filteredPlaylists, key = { it.id }) { playlist ->
+                                    val songs = viewModel.getSongsForPlaylist(playlist)
+                                    PlaylistCard(
+                                        playlist = playlist,
+                                        songs = songs,
+                                        onOpen = { onOpenPlaylist(playlist) },
+                                        onDelete = { viewModel.deletePlaylist(playlist.id) },
+                                        onRename = { newName -> viewModel.renamePlaylist(playlist.id, newName) }
+                                    )
+                                }
+                            }
+                        } else {
+                            LazyColumn(
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                items(filteredPlaylists, key = { it.id }) { playlist ->
+                                    val songs = viewModel.getSongsForPlaylist(playlist)
+                                    PlaylistCard(
+                                        playlist = playlist,
+                                        songs = songs,
+                                        onOpen = { onOpenPlaylist(playlist) },
+                                        onDelete = { viewModel.deletePlaylist(playlist.id) },
+                                        onRename = { newName -> viewModel.renamePlaylist(playlist.id, newName) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    FloatingActionButton(
+                        onClick = { showCreateDialog = true },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(20.dp),
+                        containerColor = MaterialTheme.colorScheme.primary
+                    ) {
+                        Icon(Icons.Filled.Add, "Create playlist", tint = MaterialTheme.colorScheme.onPrimary)
+                    }
+                }
             }
         }
     }
@@ -334,12 +434,62 @@ fun PlaylistsScreen(
 }
 
 @Composable
+private fun PlaylistSearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    onFilters: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = { Text("Search playlists...") },
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(24.dp),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                unfocusedIndicatorColor = MaterialTheme.colorScheme.surfaceVariant
+            ),
+            leadingIcon = {
+                Icon(
+                    Icons.Filled.Search,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            trailingIcon = {
+                if (value.isNotEmpty()) {
+                    IconButton(onClick = { onValueChange("") }) {
+                        Icon(Icons.Filled.Close, contentDescription = "Clear")
+                    }
+                }
+            },
+            singleLine = true
+        )
+        IconButton(onClick = onFilters) {
+            Icon(
+                imageVector = Icons.Filled.Tune,
+                contentDescription = "Sort and filter playlists",
+                tint = Color.White
+            )
+        }
+    }
+}
+
+@Composable
 private fun PlaylistCard(
     playlist: Playlist,
     songs: List<Song>,
     onOpen: () -> Unit,
     onDelete: () -> Unit,
-    onRename: (String) -> Unit
+    onRename: (String) -> Unit,
+    selected: Boolean = false
 ) {
     var showMenu by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
@@ -372,7 +522,10 @@ private fun PlaylistCard(
                 onClick = onOpen
             ),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+            else MaterialTheme.colorScheme.surfaceVariant
+        )
     ) {
         Row(
             modifier = Modifier

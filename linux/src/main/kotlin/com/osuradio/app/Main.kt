@@ -380,7 +380,8 @@ fun MainApp(viewModel: MainViewModel) {
                                             } else {
                                                 PlaylistsScreen(
                                                     viewModel = viewModel,
-                                                    onOpenPlaylist = { selectedPlaylist = it }
+                                                    onOpenPlaylist = { selectedPlaylist = it },
+                                                    onSongClick = { showPlayer = true }
                                                 )
                                             }
                                         }

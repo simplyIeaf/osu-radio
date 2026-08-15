@@ -76,3 +76,44 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
         freeCompilerArgs.add("-Xjdk-release=21")
     }
 }
+
+val ffmpegBinary: Provider<RegularFile> = layout.buildDirectory.file("ffmpeg/ffmpeg")
+
+val downloadFfmpeg by tasks.registering {
+    outputs.file(ffmpegBinary)
+    doLast {
+        val bin = ffmpegBinary.get().asFile
+        if (bin.exists()) return@doLast
+        bin.parentFile.mkdirs()
+        val archive = bin.parentFile.resolve("ffmpeg.tar.xz")
+        try {
+            val url = java.net.URI(
+                "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz"
+            ).toURL()
+            url.openStream().use { input -> archive.outputStream().use { input.copyTo(it) } }
+            check(archive.length() > 0) { "downloaded ffmpeg archive is empty" }
+            val exit = ProcessBuilder(
+                "tar", "-xJf", archive.absolutePath, "-C", bin.parentFile.absolutePath
+            ).start().waitFor()
+            check(exit == 0) { "could not extract ffmpeg archive" }
+            val extracted = bin.parentFile.listFiles()
+                ?.firstOrNull { it.isDirectory && it.name.startsWith("ffmpeg-") }
+                ?: error("ffmpeg archive did not contain an ffmpeg directory")
+            val ffmpeg = extracted.resolve("ffmpeg")
+            check(ffmpeg.isFile) { "ffmpeg binary not found in archive" }
+            ffmpeg.copyTo(bin, overwrite = true)
+            bin.setExecutable(true)
+            archive.delete()
+            extracted.deleteRecursively()
+        } catch (e: Exception) {
+            logger.warn("Could not bundle a static ffmpeg (${e.message}); the app will fall back to a system ffmpeg")
+            bin.delete()
+            archive.delete()
+        }
+    }
+}
+
+tasks.named<org.gradle.api.tasks.Copy>("processResources") {
+    dependsOn(downloadFfmpeg)
+    from(ffmpegBinary) { into("native") }
+}

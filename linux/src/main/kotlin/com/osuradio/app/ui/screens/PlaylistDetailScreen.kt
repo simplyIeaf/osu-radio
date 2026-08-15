@@ -183,6 +183,151 @@ fun PlaylistDetailScreen(
 }
 
 @Composable
+internal fun PlaylistDetailPane(
+    viewModel: MainViewModel,
+    playlist: Playlist,
+    onSongClick: (Song) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val settings = viewModel.settings.collectAsState()
+    val playlists = viewModel.playlists.collectAsState()
+    val allSongs = viewModel.songs.collectAsState()
+    val currentPlaylist = playlists.value.find { it.id == playlist.id } ?: playlist
+    val songs = allSongs.value.filter { currentPlaylist.songIds.contains(it.id) }
+    val totalDurationMs = songs.sumOf { it.duration }
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 24.dp, end = 24.dp, top = 20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(120.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                val cover = songs.firstOrNull { it.imagePath != null }?.imagePath
+                if (cover != null) {
+                    OsuImage(
+                        model = cover,
+                        contentDescription = "Playlist cover",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Filled.MusicNote,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(40.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = currentPlaylist.name,
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "${songs.size} songs • ${formatPlaylistDuration(totalDurationMs)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier.padding(start = 24.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = { viewModel.playPlaylist(currentPlaylist, shuffle = true) }) {
+                Icon(
+                    Icons.Filled.Shuffle,
+                    contentDescription = "Shuffle",
+                    tint = if (settings.value.shuffle) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center
+            ) {
+                IconButton(onClick = { viewModel.playPlaylist(currentPlaylist, shuffle = false) }) {
+                    Icon(
+                        Icons.Filled.PlayArrow,
+                        contentDescription = "Play",
+                        tint = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            IconButton(onClick = { viewModel.toggleRepeat() }) {
+                Icon(
+                    imageVector = when (settings.value.repeat) {
+                        RepeatMode.ONE -> Icons.Filled.RepeatOne
+                        else -> Icons.Filled.Repeat
+                    },
+                    contentDescription = "Loop",
+                    tint = if (settings.value.repeat != RepeatMode.NONE) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if (songs.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "No songs in this playlist",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                items(songs, key = { it.id }) { song ->
+                    PlaylistSongRow(
+                        song = song,
+                        onClick = {
+                            viewModel.playPlaylistFrom(currentPlaylist, song)
+                            onSongClick(song)
+                        },
+                        onRemove = { viewModel.removeSongFromPlaylist(currentPlaylist.id, song.id) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun PlaylistCoverGrid(songs: List<Song>) {
     val covers = songs.take(4)
     Box(
