@@ -3,7 +3,7 @@
 </p>
 
 # osu!radio
-Open-Source music player that lets you play osu! beatmap songs
+Open-source music player that lets you play osu! beatmap songs
 
 ## Features
 • Mods (basically the music player includes mods that make changes to songs like Nightcore)\
