@@ -1,3 +1,4 @@
+import java.net.URI
 import java.util.Properties
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
@@ -79,7 +80,7 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
 
 val ffmpegBinary: Provider<RegularFile> = layout.buildDirectory.file("ffmpeg/ffmpeg")
 
-val downloadFfmpeg by tasks.registering {
+val downloadFfmpeg = tasks.register("downloadFfmpeg") {
     outputs.file(ffmpegBinary)
     doLast {
         val bin = ffmpegBinary.get().asFile
@@ -87,7 +88,7 @@ val downloadFfmpeg by tasks.registering {
         bin.parentFile.mkdirs()
         val archive = bin.parentFile.resolve("ffmpeg.tar.xz")
         try {
-            val url = java.net.URI(
+            val url = URI(
                 "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz"
             ).toURL()
             url.openStream().use { input -> archive.outputStream().use { input.copyTo(it) } }
