@@ -30,7 +30,7 @@ class DesktopPlayer(
     }
 
     private val TAG = "DesktopPlayer"
-    private val lock = Any()
+    private val lock = Object()
 
     private var listener: Listener? = null
 

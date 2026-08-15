@@ -63,6 +63,7 @@ import androidx.compose.ui.draganddrop.awtTransferable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
@@ -87,7 +88,6 @@ import kotlinx.coroutines.launch
 import java.awt.Desktop
 import java.awt.datatransfer.DataFlavor
 import java.io.File
-import javax.imageio.ImageIO
 
 fun main() {
     System.setProperty("skiko.renderApi", "OPENGL")
@@ -509,7 +509,8 @@ private fun FileDropContainer(
 @Composable
 private fun rememberAppLogo(): ImageBitmap? = remember {
     runCatching {
-        val stream = object {}.javaClass.getResourceAsStream("/ic_app_logo.png") ?: return@remember null
-        stream.use { ImageIO.read(it) }.toComposeImageBitmap()
+        val bytes = object {}.javaClass.getResourceAsStream("/ic_app_logo.png")
+            ?.use { it.readBytes() } ?: return@remember null
+        org.jetbrains.skia.Image.makeFromEncoded(bytes).toComposeImageBitmap()
     }.getOrNull()
 }
