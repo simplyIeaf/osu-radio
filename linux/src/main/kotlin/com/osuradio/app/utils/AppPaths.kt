@@ -26,4 +26,32 @@ object AppPaths {
     fun cacheDir(): File = File(homeDir(), ".cache/osu-radio").apply { mkdirs() }
 
     fun prefsFile(): File = File(configDir(), "desktop_prefs.properties")
+
+    fun legacyDataDir(): File = File(homeDir(), "osu!radio")
+
+    fun migrateLegacyData() {
+        val legacy = legacyDataDir()
+        if (!legacy.exists() || !legacy.isDirectory) return
+        val legacySongs = File(legacy, "Songs")
+        if (legacySongs.isDirectory) {
+            legacySongs.listFiles()?.filter { it.isDirectory }?.forEach { folder ->
+                val dest = File(songsDir(), folder.name)
+                if (!dest.exists()) {
+                    try {
+                        if (!folder.renameTo(dest)) {
+                            folder.copyRecursively(dest)
+                            folder.deleteRecursively()
+                        }
+                    } catch (e: Exception) {
+                        Logger.warn("AppPaths", "Could not migrate ${folder.name} to ${dest.path}")
+                    }
+                }
+            }
+        }
+        val legacyLogs = File(legacy, "Logs")
+        if (legacyLogs.isDirectory && legacyLogs.listFiles()?.isNotEmpty() == true) {
+            val destLogs = File(dataDir(), "Logs")
+            if (!destLogs.exists()) legacyLogs.renameTo(destLogs)
+        }
+    }
 }
